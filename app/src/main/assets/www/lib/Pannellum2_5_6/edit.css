@@ -1,0 +1,282 @@
+/* Добавляем стили для полноэкранного отображения */
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+#canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+/* Стили для модального окна */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 10000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    width: 80%;
+    max-width: 900px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+.close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.url-input-group {
+    display: flex;
+    gap: 10px;
+}
+
+.url-input-group input {
+    flex: 1;
+}
+
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-primary {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.btn-secondary {
+    background-color: #2196F3;
+    color: white;
+}
+
+.btn-success {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.btn-warning {
+    background-color: #ff9800;
+    color: white;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+}
+
+.preview-container {
+    margin: 20px 0;
+    border: 1px solid #ddd;
+    padding: 15px;
+    border-radius: 4px;
+}
+
+.iframe-container {
+    width: 100%;
+    height: 400px;
+    border: 1px solid #ccc;
+    margin: 10px 0;
+}
+
+.iframe-container iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+.preview-coordinates {
+    background-color: #f5f5f5;
+    padding: 10px;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.preview-coordinates p {
+    margin: 0 0 5px 0;
+    font-weight: bold;
+}
+
+#selectedCoordinates {
+    min-height: 60px;
+    padding: 8px;
+    background-color: white;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+
+.hotspots-list {
+    margin-top: 20px;
+    border-top: 1px solid #eee;
+    padding-top: 20px;
+}
+
+.hotspot-item {
+    padding: 10px;
+    border: 1px solid #ddd;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #f9f9f9;
+}
+
+.hotspot-item:hover {
+    background-color: #f0f0f0;
+}
+
+.hotspot-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.file-input-hidden {
+    display: none;
+}
+
+/* ✅ ИСПРАВЛЕНО: точка перед классом */
+.hotspot-item
+.import-success {
+    background-color: #d4edda;
+    color: #155724;
+    padding: 8px;
+    border-radius: 4px;
+    margin: 10px 0;
+    display: none;
+}
+
+.form-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.form-group-30 {
+    flex: 1 1 30%;
+    min-width: 200px;
+}
+
+.form-group-30 label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-group-30 input,
+.form-group-30 select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.form-group-full {
+    margin-bottom: 15px;
+}
+
+.form-group-full label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-group-full input,
+.form-group-full select {
+    width: 100%;
+    padding: 8px;
+    box-sizing: border-box;
+}
+
+/* Добавляем стили для новых полей */
+.url-input-group {
+    display: flex;
+    gap: 10px;
+}
+
+.url-input-group input {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.url-input-group .btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+#fullUrlDisplay {
+    font-family: monospace;
+    font-size: 12px;
+    color: #333;
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 8px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.form-group small {
+    display: block;
+    margin-top: 4px;
+    color: #666;
+    font-size: 12px;
+}
+
