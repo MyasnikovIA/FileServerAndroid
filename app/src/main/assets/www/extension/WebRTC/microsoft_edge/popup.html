@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: system-ui, sans-serif; width: 340px; padding: 12px; }
+        label { display: block; margin: 10px 0 2px; font-size: 12px; color: #444; }
+        input, select { width: 100%; box-sizing: border-box; padding: 5px; font-size: 13px; }
+        button { margin-top: 10px; width: 100%; padding: 7px; font-size: 13px; cursor: pointer; }
+        #status { margin-top: 8px; font-size: 12px; color: #666; }
+        .hint { font-size: 11px; color: #888; margin-top: 4px; }
+    </style>
+</head>
+<body>
+<h3 style="margin:0 0 4px">Video Broadcast</h3>
+
+<label for="source">Источник</label>
+<select id="source">
+    <option value="camera">📷 Веб-камера</option>
+    <option value="screen">🖥️ Экран монитора</option>
+</select>
+
+<label for="server">Server IP (БЕЗ порта)</label>
+<input id="server" placeholder="192.168.1.100">
+<div class="hint">WebSocket подключится к <b>:8081</b>.</div>
+
+<label for="room">Room</label>
+<input id="room" value="main">
+
+<button id="start">Start broadcasting</button>
+<button id="stop">Stop</button>
+<div id="status"></div>
+<script src="popup.js"></script>
+</body>
+</html>

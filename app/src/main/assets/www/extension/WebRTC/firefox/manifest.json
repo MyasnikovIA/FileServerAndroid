@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Video Chat Broadcaster (WebRTC)",
+  "version": "3.0.0",
+  "description": "Transmits camera/mic via WebRTC using FileServer signaling.",
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "videochat-broadcaster@miacomsoft.local",
+      "strict_min_version": "109.0"
+    }
+  },
+
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+
+  "host_permissions": [
+    "<all_urls>"
+  ],
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Broadcast"
+  },
+
+  "background": {
+    "scripts": ["background.js"]
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["bridge.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

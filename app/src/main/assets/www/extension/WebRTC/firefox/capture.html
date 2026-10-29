@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <title>Broadcasting</title>
+    <style>
+        html, body { height: 100%; margin: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, sans-serif;
+            background: #111;
+            color: #eee;
+            display: flex;
+            flex-direction: column;
+            padding: 8px;
+        }
+        video {
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+            background: #000;
+            border-radius: 6px;
+            display: block;
+            object-fit: contain;
+        }
+        #status {
+            flex-shrink: 0;
+            margin-top: 6px;
+            font-size: 12px;
+            color: #bbb;
+            word-break: break-all;
+            min-height: 16px;
+        }
+        #viewers {
+            flex-shrink: 0;
+            margin-top: 4px;
+            font-size: 11px;
+            color: #89b4fa;
+        }
+        button {
+            flex-shrink: 0;
+            margin-top: 8px;
+            width: 100%;
+            padding: 7px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background: #c42b1c;
+            color: white;
+            font-weight: bold;
+        }
+        button:hover { background: #e03e2d; }
+    </style>
+</head>
+<body>
+<video id="preview" autoplay muted playsinline></video>
+<div id="status">starting…</div>
+<div id="viewers"></div>
+<button id="stop">Stop broadcasting</button>
+<script src="capture.js"></script>
+</body>
+</html>
