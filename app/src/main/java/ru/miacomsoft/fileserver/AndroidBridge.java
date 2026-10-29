@@ -1,9 +1,12 @@
 package ru.miacomsoft.fileserver;
 
 import android.app.Activity;
+import android.app.ActivityManager;
+import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
@@ -38,7 +41,6 @@ public class AndroidBridge {
 
     private static final String TAG = "AndroidBridge";
 
-    /** Ожидающий установки APK — переживает возврат из «Неизвестных источников». */
     private static volatile String sPendingInstallPath = null;
 
     private final Activity activity;
@@ -131,52 +133,170 @@ public class AndroidBridge {
     // ============================================================
 
     @JavascriptInterface
-    public boolean launchApp(String pkg, String activityName) {
-        if (pkg == null || pkg.isEmpty()) return false;
-        Log.i(TAG, "launchApp: pkg=" + pkg + " act=" + activityName);
+    public boolean launchApp(final String pkg, final String activityName) {
+        // ЭТОТ ЛОГ — ПЕРВОЙ СТРОКОЙ. Если его нет в logcat,
+        // значит JS-метод вообще не вызвал AndroidBridge.launchApp().
+        Log.i(TAG, ">>> launchApp CALLED: pkg=" + pkg + " act=" + activityName);
 
-        Intent intent = buildLaunchIntent(pkg, activityName);
+        if (pkg == null || pkg.isEmpty()) {
+            Log.i(TAG, "launchApp: empty pkg");
+            return false;
+        }
+        Log.i(TAG, "=== launchApp START: pkg=" + pkg + " act=" + activityName);
+
+        final Intent intent = buildLaunchIntent(pkg, activityName);
         if (intent == null) {
-            Log.e(TAG, "launchApp: no intent for " + pkg);
+            Log.i(TAG, "launchApp: no intent for " + pkg);
             return false;
         }
 
-        // Отправляем интент с задержкой 150 мс через Handler.
-        // Это даёт WebView / start menu время завершить закрытие,
-        // после чего startActivity не «проглатывается» системой.
-        return dispatchWithDelay(intent);
+        // Обязательные флаги для запуска из лаунчера
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+
+        Log.i(TAG, "launchApp: intent=" + intent
+                + " flags=0x" + Integer.toHexString(intent.getFlags()));
+
+        // ВАЖНО: запускаем со ГЛАВНОГО потока — иначе Android 10+
+        // блокирует как background activity launch и приложение
+        // открывается за WebView.
+        try {
+            Handler handler = new Handler(Looper.getMainLooper());
+            handler.post(() -> doLaunchOnMain(intent));
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "launchApp: handler setup failed", e);
+            // Крайний случай — прямой вызов
+            return fireDirectly(intent);
+        }
+    }
+
+    /**
+     * Все попытки запуска. Выполняется на главном потоке.
+     */
+    private void doLaunchOnMain(Intent intent) {
+        Log.i(TAG, "doLaunchOnMain: START intent=" + intent.getComponent());
+
+        // === 1. activity.startActivity ===
+        try {
+            activity.startActivity(intent);
+            Log.i(TAG, "doLaunch[1] activity.startActivity OK");
+            return;
+        } catch (Exception e) {
+            Log.w(TAG, "doLaunch[1] activity.startActivity: " + e.getMessage());
+        }
+
+        // === 2. context.startActivity ===
+        try {
+            context.startActivity(intent);
+            Log.i(TAG, "doLaunch[2] context.startActivity OK");
+            return;
+        } catch (Exception e) {
+            Log.w(TAG, "doLaunch[2] context.startActivity: " + e.getMessage());
+        }
+
+        // === 3. PendingIntent.send ===
+        try {
+            PendingIntent pi = PendingIntent.getActivity(
+                    context, 0, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT
+                            | PendingIntent.FLAG_IMMUTABLE);
+            pi.send();
+            Log.i(TAG, "doLaunch[3] PendingIntent.send OK");
+            return;
+        } catch (Exception e) {
+            Log.w(TAG, "doLaunch[3] PendingIntent.send: " + e.getMessage());
+        }
+
+        // === 4. Activity.startIntentSender ===
+        try {
+            PendingIntent pi = PendingIntent.getActivity(
+                    context, 0, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT
+                            | PendingIntent.FLAG_IMMUTABLE);
+            IntentSender sender = pi.getIntentSender();
+            activity.startIntentSender(sender, null, 0, 0, 0, null);
+            Log.i(TAG, "doLaunch[4] startIntentSender OK");
+            return;
+        } catch (Exception e) {
+            Log.w(TAG, "doLaunch[4] startIntentSender: " + e.getMessage());
+        }
+
+        // === 5. Activity.startActivities ===
+        try {
+            activity.startActivities(new Intent[]{ intent });
+            Log.i(TAG, "doLaunch[5] startActivities OK");
+            return;
+        } catch (Exception e) {
+            Log.w(TAG, "doLaunch[5] startActivities: " + e.getMessage());
+        }
+
+        // === 6. moveTaskToFront (если приложение уже запущено) ===
+        try {
+            ActivityManager am = (ActivityManager)
+                    context.getSystemService(Context.ACTIVITY_SERVICE);
+            List<ActivityManager.RunningTaskInfo> tasks = am.getRunningTasks(50);
+            if (tasks != null) {
+                for (ActivityManager.RunningTaskInfo task : tasks) {
+                    if (task.baseActivity != null
+                            && task.baseActivity.getPackageName() != null
+                            && task.baseActivity.getPackageName().equals(
+                            intent.getComponent() != null
+                                    ? intent.getComponent().getPackageName()
+                                    : "")) {
+                        am.moveTaskToFront(task.id,
+                                ActivityManager.MOVE_TASK_WITH_HOME);
+                        Log.i(TAG, "doLaunch[6] moveTaskToFront OK, task=" + task.id);
+                        return;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "doLaunch[6] moveTaskToFront: " + e.getMessage());
+        }
+
+        Log.e(TAG, "doLaunch: ALL APPROACHES FAILED for " + intent);
+    }
+
+    private boolean fireDirectly(Intent intent) {
+        try {
+            activity.startActivity(intent);
+            Log.i(TAG, "fireDirectly: OK");
+            return true;
+        } catch (Exception e) {
+            Log.w(TAG, "fireDirectly failed: " + e.getMessage());
+            return false;
+        }
     }
 
     private Intent buildLaunchIntent(String pkg, String activityName) {
         PackageManager pm = context.getPackageManager();
 
-        // === Стратегия 1: getLaunchIntentForPackage (самый надёжный) ===
+        // === 1. getLaunchIntentForPackage ===
         try {
             Intent intent = pm.getLaunchIntentForPackage(pkg);
             if (intent != null) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                Log.i(TAG, "buildLaunchIntent: via getLaunchIntentForPackage");
+                Log.i(TAG, "buildLaunchIntent[1]: via getLaunchIntentForPackage");
                 return intent;
             }
         } catch (Exception e) {
-            Log.w(TAG, "getLaunchIntentForPackage failed: " + e.getMessage());
+            Log.w(TAG, "getLaunchIntentForPackage: " + e.getMessage());
         }
 
-        // === Стратегия 2: явный ComponentName ===
+        // === 2. Явный ComponentName ===
         if (activityName != null && !activityName.isEmpty()) {
             try {
                 Intent intent = new Intent(Intent.ACTION_MAIN);
                 intent.addCategory(Intent.CATEGORY_LAUNCHER);
                 intent.setComponent(new ComponentName(pkg, activityName));
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                Log.i(TAG, "buildLaunchIntent: via ComponentName");
+                Log.i(TAG, "buildLaunchIntent[2]: via ComponentName");
                 return intent;
             } catch (Exception e) {
-                Log.w(TAG, "ComponentName failed: " + e.getMessage());
+                Log.w(TAG, "ComponentName: " + e.getMessage());
             }
         }
 
-        // === Стратегия 3: queryIntentActivities(pkg) ===
+        // === 3. queryIntentActivities(pkg) ===
         try {
             Intent main = new Intent(Intent.ACTION_MAIN);
             main.addCategory(Intent.CATEGORY_LAUNCHER);
@@ -189,52 +309,18 @@ public class AndroidBridge {
                 intent.setComponent(new ComponentName(
                         ri.activityInfo.packageName,
                         ri.activityInfo.name));
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                Log.i(TAG, "buildLaunchIntent: via queryIntentActivities");
+                Log.i(TAG, "buildLaunchIntent[3]: via queryIntentActivities");
                 return intent;
             }
         } catch (Exception e) {
-            Log.w(TAG, "queryIntentActivities failed: " + e.getMessage());
+            Log.w(TAG, "queryIntentActivities: " + e.getMessage());
         }
 
         return null;
     }
 
-    /**
-     * Отправляет интент с задержкой 150 мс через Handler.
-     * Возвращает true сразу (интент гарантированно отправлен асинхронно).
-     * Если activity.startActivity() упадёт — лог, но пользователь уже
-     * не увидит тоста (это асинхронный вызов).
-     */
-    private boolean dispatchWithDelay(final Intent intent) {
-        try {
-            Handler handler = new Handler(Looper.getMainLooper());
-            handler.postDelayed(() -> {
-                try {
-                    // Всегда activity.startActivity — Activity-контекст
-                    // самый надёжный для запуска из лаунчера
-                    activity.startActivity(intent);
-                    Log.i(TAG, "dispatchWithDelay: startActivity OK");
-                } catch (Exception e) {
-                    Log.e(TAG, "dispatchWithDelay: startActivity failed", e);
-                    // Fallback: через context
-                    try {
-                        context.startActivity(intent);
-                        Log.i(TAG, "dispatchWithDelay: context.startActivity OK");
-                    } catch (Exception e2) {
-                        Log.e(TAG, "dispatchWithDelay: context.startActivity failed", e2);
-                    }
-                }
-            }, 150);
-            return true;
-        } catch (Exception e) {
-            Log.e(TAG, "dispatchWithDelay setup failed", e);
-            return false;
-        }
-    }
-
     // ============================================================
-    // Установка APK
+    // Установка APK (без изменений)
     // ============================================================
 
     @JavascriptInterface
@@ -245,21 +331,19 @@ public class AndroidBridge {
         }
         Log.i(TAG, "installApk: virtualPath=" + virtualPath);
 
-        // Android 8+: разрешение «Установка из неизвестных источников»
         if (Build.VERSION.SDK_INT >= 26) {
             try {
                 PackageManager pm = context.getPackageManager();
                 if (!pm.canRequestPackageInstalls()) {
-                    Log.i(TAG, "installApk: requesting unknown sources permission");
+                    Log.i(TAG, "installApk: requesting unknown sources");
                     sPendingInstallPath = virtualPath;
                     openUnknownSourcesSettings();
                     return false;
                 }
             } catch (Exception e) {
-                Log.w(TAG, "canRequestPackageInstalls failed: " + e.getMessage());
+                Log.w(TAG, "canRequestPackageInstalls: " + e.getMessage());
             }
         }
-
         return doInstall(virtualPath);
     }
 
@@ -270,7 +354,6 @@ public class AndroidBridge {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             activity.startActivity(intent);
         } catch (Exception e) {
-            Log.w(TAG, "unknown-sources settings failed: " + e.getMessage());
             try {
                 Intent intent = new Intent(Settings.ACTION_SECURITY_SETTINGS);
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -287,66 +370,48 @@ public class AndroidBridge {
         }
     }
 
-    /**
-     * Вызывается из MainActivity.onResume().
-     * Если пользователь уходил включать «Неизвестные источники»
-     * и вернулся — повторяем установку.
-     */
     public static void retryPendingInstall(Activity activity) {
         final String path = sPendingInstallPath;
         if (path == null) return;
-
         try {
             PackageManager pm = activity.getPackageManager();
             if (pm.canRequestPackageInstalls()) {
                 sPendingInstallPath = null;
-                Log.i(TAG, "retryPendingInstall: permission granted, retrying");
+                Log.i(TAG, "retryPendingInstall: retrying install");
                 new AndroidBridge(activity).installApk(path);
             }
         } catch (Exception e) {
-            Log.w(TAG, "retryPendingInstall failed: " + e.getMessage());
+            Log.w(TAG, "retryPendingInstall: " + e.getMessage());
         }
     }
 
     private boolean doInstall(String virtualPath) {
         File apkFile = resolveVirtualPath(virtualPath);
-        if (apkFile == null) {
-            Log.e(TAG, "doInstall: cannot resolve " + virtualPath);
-            return false;
-        }
-        if (!apkFile.exists() || !apkFile.isFile()) {
-            Log.e(TAG, "doInstall: file not found " + apkFile.getAbsolutePath());
+        if (apkFile == null || !apkFile.exists() || !apkFile.isFile()) {
+            Log.e(TAG, "doInstall: file not found " + virtualPath);
             return false;
         }
         if (!apkFile.getName().toLowerCase().endsWith(".apk")) {
             Log.e(TAG, "doInstall: not .apk");
             return false;
         }
-
         try {
-            // Копируем в cache (нужно для FileProvider)
             File cacheDir = new File(context.getCacheDir(), "apk");
             if (!cacheDir.exists()) cacheDir.mkdirs();
             File cacheFile = new File(cacheDir, apkFile.getName());
-
             try (InputStream in = new FileInputStream(apkFile);
                  OutputStream out = new FileOutputStream(cacheFile)) {
                 byte[] buf = new byte[65536];
                 int n;
                 while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
             }
-
-            Uri apkUri = FileProvider.getUriForFile(
-                    context,
-                    context.getPackageName() + ".fileprovider",
-                    cacheFile);
-
+            Uri apkUri = FileProvider.getUriForFile(context,
+                    context.getPackageName() + ".fileprovider", cacheFile);
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.setDataAndType(apkUri,
                     "application/vnd.android.package-archive");
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
             activity.startActivity(intent);
             Log.i(TAG, "doInstall: installer opened");
             return true;
@@ -358,15 +423,10 @@ public class AndroidBridge {
 
     private File resolveVirtualPath(String virtualPath) {
         Config cfg = FileServer.config();
-        if (cfg == null) {
-            Log.e(TAG, "resolveVirtualPath: FileServer.config() is null");
-            return null;
-        }
-
+        if (cfg == null) return null;
         String norm = virtualPath.replace('\\', '/');
         while (norm.startsWith("/")) norm = norm.substring(1);
         if (norm.isEmpty()) return null;
-
         int slash = norm.indexOf('/');
         if (slash > 0) {
             String shareName = norm.substring(0, slash);
@@ -375,25 +435,20 @@ public class AndroidBridge {
             if (sh != null && sh.isFolder()) {
                 try {
                     return sh.physicalPath().resolve(rel).normalize().toFile();
-                } catch (Exception e) {
-                    Log.w(TAG, "resolveVirtualPath via share", e);
-                }
+                } catch (Exception ignored) {}
             }
         }
-
         Config.Share root = cfg.findRootShare();
         if (root != null && root.isFolder()) {
             try {
                 return root.physicalPath().resolve(norm).normalize().toFile();
-            } catch (Exception e) {
-                Log.w(TAG, "resolveVirtualPath via root", e);
-            }
+            } catch (Exception ignored) {}
         }
         return null;
     }
 
     // ============================================================
-    // Настройки Android
+    // Настройки / лаунчер
     // ============================================================
 
     @JavascriptInterface
@@ -415,17 +470,14 @@ public class AndroidBridge {
         }
     }
 
-    // ============================================================
-    // Лаунчер по умолчанию
-    // ============================================================
-
     @JavascriptInterface
     public boolean isDefaultLauncher() {
         try {
             PackageManager pm = context.getPackageManager();
             Intent home = new Intent(Intent.ACTION_MAIN);
             home.addCategory(Intent.CATEGORY_HOME);
-            ResolveInfo ri = pm.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY);
+            ResolveInfo ri = pm.resolveActivity(home,
+                    PackageManager.MATCH_DEFAULT_ONLY);
             if (ri == null || ri.activityInfo == null) return false;
             return context.getPackageName().equals(ri.activityInfo.packageName);
         } catch (Exception e) {
