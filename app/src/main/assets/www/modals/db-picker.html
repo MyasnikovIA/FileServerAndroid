@@ -1,0 +1,40 @@
+<div id="dbPickerModal" class="modal-overlay hidden" onclick="FAR.closeDbPickerOutside(event)">
+    <div class="modal-content db-picker-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3>📁 Выбор изображения из FileBD</h3>
+            <button class="close-btn" onclick="FAR.closeDbPicker()">✕</button>
+        </div>
+
+        <div class="modal-body db-picker-body">
+
+            <!-- Левая колонка: список файлов -->
+            <div class="db-picker-col db-picker-list-col">
+                <div class="db-picker-path-bar">
+                    <button class="db-picker-nav" onclick="FAR.dbPickerGoUp()" title="Вверх">⬆</button>
+                    <button class="db-picker-nav" onclick="FAR.dbPickerGoRoot()" title="В корень">🏠</button>
+                    <span class="db-picker-path" id="dbPickerCurrentPath">/</span>
+                </div>
+                <input type="text" id="dbPickerFilter" class="db-picker-filter"
+                       placeholder="🔍 Фильтр по имени файла…"
+                       oninput="FAR.dbPickerApplyFilter()">
+                <div class="db-picker-list" id="dbPickerList"></div>
+            </div>
+
+            <!-- Правая колонка: превью -->
+            <div class="db-picker-col db-picker-preview-col">
+                <div class="db-picker-preview-wrapper">
+                    <div id="dbPickerPreviewCanvas" class="db-picker-preview-canvas"></div>
+                    <div id="dbPickerPreviewPlaceholder" class="db-picker-preview-placeholder">
+                        Выберите файл слева
+                    </div>
+                </div>
+                <div class="db-picker-info" id="dbPickerInfo"></div>
+                <div class="db-picker-actions">
+                    <button class="btn btn-secondary" onclick="FAR.closeDbPicker()">Отмена</button>
+                    <button class="btn btn-success" id="dbPickerSelectBtn"
+                            onclick="FAR.dbPickerConfirm()" disabled>✓ Выбрать</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,145 @@
+/* ============================================================
+   Модуль Console — терминал.
+   ============================================================ */
+
+.console-modal-content {
+    max-width: 100vw;
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    border: none;
+    display: flex;
+    flex-direction: column;
+}
+
+#consoleModal { z-index: 7000; }
+
+.console-host {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: #0b0b12;
+    overflow: hidden;
+}
+
+/* ---- Тулбар ---- */
+.console-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: #15151e;
+    border-bottom: 1px solid #232333;
+    flex-shrink: 0;
+}
+
+.console-btn {
+    height: 26px;
+    padding: 0 10px;
+    background: #232333;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.console-btn:hover:not(:disabled) { background: #313244; }
+.console-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.console-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #a6adc8;
+    padding: 3px 10px;
+    border-radius: 4px;
+    background: #1a1a24;
+    border: 1px solid #232333;
+}
+.console-status .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #6c7086;
+    box-shadow: 0 0 6px rgba(0,0,0,0.5);
+}
+.console-status.online  .dot { background: #a6e3a1; }
+.console-status.loading .dot { background: #f9e2af; animation: c-pulse 1s infinite; }
+.console-status.error   .dot { background: #f38ba8; }
+
+@keyframes c-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+}
+
+/* ---- Область вывода ---- */
+.console-body {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.console-output {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    padding: 10px 14px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #cdd6f4;
+    background: #0b0b12;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 0;
+}
+
+.console-output .line-system  { color: #89b4fa; }
+.console-output .line-stdout  { color: #cdd6f4; }
+.console-output .line-stderr  { color: #f38ba8; }
+.console-output .line-exit    { color: #f9e2af; font-style: italic; }
+.console-output .line-error   { color: #f38ba8; font-weight: bold; }
+
+/* ---- Поле ввода ---- */
+.console-inputbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: #0b0b12;
+    border-top: 1px solid #232333;
+    flex-shrink: 0;
+}
+
+.console-prompt {
+    color: #a6e3a1;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.console-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #cdd6f4;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    padding: 2px 0;
+    caret-color: #a6e3a1;
+}
+
+.console-input::placeholder { color: #45475a; }
+
+/* ---- В оконном режиме — компактнее ---- */
+.wm-window .console-toolbar { padding: 4px 8px; gap: 6px; }
+.wm-window .console-output { font-size: 11px; padding: 6px 10px; }
+.wm-window .console-input  { font-size: 12px; }

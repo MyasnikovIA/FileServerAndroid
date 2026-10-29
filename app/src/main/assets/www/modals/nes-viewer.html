@@ -1,0 +1,30 @@
+<div id="nesViewerModal" class="modal-overlay hidden" onclick="FAR.closeNesViewerOutside(event)">
+    <div class="modal-content nes-modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="nesViewerTitle">🎮 NES</h3>
+            <div class="modal-header-actions">
+                <button class="viewer-nav-btn" id="nesPrevBtn"
+                        onclick="FAR.viewerNavigate(-1)"
+                        title="Предыдущий файл">◀</button>
+                <button class="viewer-nav-btn" id="nesNextBtn"
+                        onclick="FAR.viewerNavigate(+1)"
+                        title="Следующий файл">▶</button>
+                <button class="close-btn" onclick="FAR.closeNesViewer()">✕</button>
+            </div>
+        </div>
+        <div class="modal-body nes-modal-body">
+            <div id="nesRoot" class="nes-root"></div>
+            <div id="nesLoading" class="nes-loading">
+                <div class="spinner"></div>
+                <div class="nes-loading-text" id="nesLoadingText">Загрузка ROM…</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <span id="nesViewerInfo"></span>
+            <span class="nes-keys-hint">
+                🎮 Управление: ← ↑ ↓ → — стрелки; Z — B, X — A; Enter — Start; Right Ctrl — Select
+            </span>
+            <button onclick="FAR.downloadCurrentNes()">📥 Скачать оригинал</button>
+        </div>
+    </div>
+</div>

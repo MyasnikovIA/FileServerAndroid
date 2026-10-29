@@ -1,0 +1,11 @@
+<div id="consoleModal" class="modal-overlay hidden" onclick="FAR.closeConsoleOutside(event)">
+    <div class="modal-content console-modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="consoleModalTitle">🖥 Console</h3>
+            <div class="modal-header-actions">
+                <button class="close-btn" onclick="FAR.closeConsole()" title="Закрыть">✕</button>
+            </div>
+        </div>
+        <div class="console-host" id="consoleModalHost"></div>
+    </div>
+</div>

@@ -1,0 +1,271 @@
+/* ============================================================
+   Просмотрщик видео (video-viewer.css)
+
+   ВАЖНО:
+     • .video-modal-body наследует flex:1 от .modal-body, т.е.
+       занимает всю оставшуюся высоту модалки.
+     • .video-stage растянут на 100% этой высоты.
+     • <video> растянут на 100% stage через width/height:100%,
+       а пропорции сохраняются через object-fit: contain.
+       Если нужно заполнить без чёрных полос — замените
+       'contain' на 'cover' (края обрежутся).
+   ============================================================ */
+
+.video-modal-content {
+    background: #1a1a1a;
+    color: #dcdcdc;
+    width: 95%;
+    max-width: 1100px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.video-modal-content .modal-header {
+    background: #0f0f0f;
+    border-bottom: 1px solid #000;
+    color: #dcdcdc;
+}
+
+.video-modal-content .modal-header h3 {
+    font-size: 14px;
+    color: #dcdcdc;
+    margin: 0;
+}
+
+/* Тело — flex-контейнер, растягивает stage */
+.video-modal-body {
+    background: #000;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    overflow: hidden;
+    /* flex: 1 и min-height уже заданы .modal-body */
+}
+
+/* Сцена — заполняет всё тело */
+.video-stage {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    overflow: hidden;
+}
+
+/* Видео — растянуто на весь stage, пропорции сохраняются */
+.video-stage video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+    outline: none;
+}
+
+/* ==== Лоадер ==== */
+.video-loading {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    z-index: 5;
+}
+
+.video-loading.hidden { display: none; }
+
+.video-loading .loading-text {
+    color: #dcdcdc;
+    font-size: 13px;
+}
+
+/* ==== Маленький бейдж буферизации ==== */
+.video-buffering-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(0,0,0,0.7);
+    color: #ffcc00;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    z-index: 6;
+    pointer-events: none;
+}
+
+.video-buffering-badge.hidden { display: none; }
+
+.video-buffering-badge .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ffcc00;
+    animation: vv-pulse 1s infinite ease-in-out;
+}
+
+@keyframes vv-pulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+    50%      { opacity: 1;   transform: scale(1.1); }
+}
+
+/* ==== Оверлей «нажмите, чтобы играть» ==== */
+.video-click-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    cursor: pointer;
+    z-index: 7;
+    color: #fff;
+}
+
+.video-click-overlay.hidden { display: none; }
+
+.video-click-icon {
+    font-size: 64px;
+    color: #89b4fa;
+    text-shadow: 0 0 20px rgba(137,180,250,0.5);
+}
+
+.video-click-text {
+    font-size: 14px;
+    color: #dcdcdc;
+}
+
+/* ==== Футер ==== */
+.video-modal-footer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #0f0f0f;
+    border-top: 1px solid #000;
+}
+
+.video-modal-footer #videoViewerInfo {
+    color: #a6adc8;
+    font-size: 12px;
+}
+
+.video-load-status {
+    color: #89b4fa;
+    font-size: 11px;
+    font-family: "Courier New", monospace;
+    margin-left: auto;
+    margin-right: 12px;
+}
+
+/* ==== Fullscreen-режим ==== */
+.video-stage:fullscreen,
+.video-stage:-webkit-full-screen,
+.video-stage:-moz-full-screen,
+.video-stage:-ms-fullscreen {
+    max-height: none;
+    height: 100vh;
+    width: 100vw;
+    background: #000;
+}
+
+.video-stage:fullscreen video,
+.video-stage:-webkit-full-screen video,
+.video-stage:-moz-full-screen video,
+.video-stage:-ms-fullscreen video {
+    max-height: none;
+    height: 100vh;
+    width: 100vw;
+    object-fit: contain;
+}
+
+/* ==== Полоса прокрутки времени ==== */
+.video-seekbar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 8px 12px 6px 12px;
+    background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.75) 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 4;
+    user-select: none;
+    transition: opacity 0.2s;
+}
+
+.video-seekbar-track {
+    position: relative;
+    height: 8px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.video-seekbar-track:hover {
+    height: 10px;
+}
+
+.video-seekbar-buffered {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: rgba(255,255,255,0.25);
+    border-radius: 4px;
+    width: 0%;
+    pointer-events: none;
+}
+
+.video-seekbar-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: #89b4fa;
+    border-radius: 4px;
+    width: 0%;
+    pointer-events: none;
+}
+
+.video-seekbar-thumb {
+    position: absolute;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 4px rgba(0,0,0,0.6);
+    transform: translate(-50%, -50%);
+    left: 0%;
+    pointer-events: none;
+    transition: transform 0.1s;
+}
+
+.video-seekbar-track:hover .video-seekbar-thumb {
+    transform: translate(-50%, -50%) scale(1.2);
+}
+
+.video-time-display {
+    text-align: right;
+    font-size: 12px;
+    font-family: "Courier New", monospace;
+    color: #dcdcdc;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+
+/* В fullscreen полосу скрываем */
+.video-stage:fullscreen .video-seekbar,
+.video-stage:-webkit-full-screen .video-seekbar,
+.video-stage:-moz-full-screen .video-seekbar,
+.video-stage:-ms-fullscreen .video-seekbar {
+    display: none;
+}

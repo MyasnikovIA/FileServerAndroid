@@ -1,0 +1,270 @@
+/* ============================================================
+   Модалка / WM-окно «Браузер».
+   ============================================================ */
+
+/* ---------- Модалка (панельный режим) ---------- */
+.browser-modal-content {
+    max-width: 100vw;
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    border: none;
+    display: flex;
+    flex-direction: column;
+}
+
+#browserModal { z-index: 7000; }
+
+/* ---------- Общий host (и в модалке, и в WM-окне) ---------- */
+.browser-host {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: #1e1e2e;
+    overflow: hidden;
+    position: relative;
+}
+
+/* ---------- Тулбар ---------- */
+.browser-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    background: #232333;
+    border-bottom: 1px solid #2b2b3c;
+    flex-shrink: 0;
+}
+
+.browser-btn {
+    min-width: 32px;
+    height: 30px;
+    padding: 0 8px;
+    background: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s;
+    flex-shrink: 0;
+}
+.browser-btn:hover:not(:disabled)  { background: #45475a; }
+.browser-btn:active:not(:disabled) { background: #585b70; }
+.browser-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.browser-btn-go {
+    background: #89b4fa;
+    color: #1e1e2e;
+    border-color: #89b4fa;
+    font-weight: bold;
+}
+.browser-btn-go:hover { background: #74c7ec; border-color: #74c7ec; }
+
+.browser-btn-star {
+    color: #6c7086;
+    font-size: 16px;
+}
+.browser-btn-star.active { color: #f9e2af; }
+
+/* ---------- Адресная строка ---------- */
+.browser-url-input {
+    flex: 1;
+    height: 30px;
+    padding: 0 10px;
+    background: #181825;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    color: #cdd6f4;
+    font-family: monospace;
+    font-size: 12px;
+    outline: none;
+    min-width: 0;
+}
+.browser-url-input:focus {
+    border-color: #89b4fa;
+    background: #1e1e2e;
+}
+
+/* ---------- Полоса закладок (Chromium-style) ---------- */
+.browser-bookmarks-bar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px 10px;
+    background: #1e1e2e;
+    border-bottom: 1px solid #2b2b3c;
+    flex-shrink: 0;
+    min-height: 28px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+}
+.browser-bookmarks-bar::-webkit-scrollbar { height: 4px; }
+.browser-bookmarks-bar::-webkit-scrollbar-thumb {
+    background: #45475a; border-radius: 2px;
+}
+
+.browser-bookmarks-empty {
+    color: #6c7086;
+    font-size: 11px;
+    font-style: italic;
+    padding: 3px 6px;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.browser-bookmark {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #cdd6f4;
+    background: transparent;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    max-width: 180px;
+    flex-shrink: 0;
+    user-select: none;
+    transition: background 0.1s;
+}
+.browser-bookmark:hover {
+    background: #313244;
+    border-color: #45475a;
+}
+.browser-bookmark.active {
+    background: #313244;
+    border-color: #89b4fa;
+}
+.browser-bookmark-icon {
+    font-size: 13px;
+    flex-shrink: 0;
+    line-height: 1;
+}
+.browser-bookmark-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+/* ---------- Прогресс-бар загрузки ---------- */
+.browser-progress {
+    height: 2px;
+    background: transparent;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+.browser-progress-fill {
+    height: 100%;
+    width: 0;
+    background: #89b4fa;
+    transition: width 0.15s linear;
+}
+.browser-progress.active .browser-progress-fill {
+    width: 90%;
+    transition: width 4s cubic-bezier(0.1, 0.7, 0.1, 1);
+}
+.browser-progress.done .browser-progress-fill {
+    width: 100%;
+    transition: width 0.15s linear;
+}
+
+/* ---------- IFRAME ---------- */
+.browser-body {
+    flex: 1;
+    min-height: 0;
+    background: #ffffff;
+    position: relative;
+    display: flex;
+}
+.browser-iframe {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: #ffffff;
+    display: block;
+}
+
+/* ---------- Статус-бар ---------- */
+.browser-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #181825;
+    border-top: 1px solid #2b2b3c;
+    padding: 4px 14px;
+    font-size: 11px;
+    font-family: monospace;
+    flex-shrink: 0;
+}
+.browser-status {
+    color: #a6adc8;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+.browser-status.error { color: #f38ba8; }
+.browser-status.ok    { color: #a6e3a1; }
+.browser-status.load  { color: #f9e2af; }
+
+.browser-info {
+    color: #6c7086;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+/* ============================================================
+   Закладка — контекстное меню (ПКМ по закладке)
+   ============================================================ */
+.browser-bookmark-menu {
+    position: fixed;
+    z-index: 99999;
+    min-width: 180px;
+    background: #1e1e2e;
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+    padding: 4px;
+    font-size: 12px;
+    color: #cdd6f4;
+    user-select: none;
+}
+.browser-bookmark-menu.hidden { display: none; }
+.browser-bookmark-menu .bm-item {
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.browser-bookmark-menu .bm-item:hover { background: #313244; }
+.browser-bookmark-menu .bm-item.danger { color: #f38ba8; }
+.browser-bookmark-menu .bm-sep {
+    height: 1px;
+    background: #45475a;
+    margin: 4px 6px;
+}
+
+/* ============================================================
+   Адаптация для оконного режима (WM).
+   Внутри win.bodyEl места меньше — уменьшаем отступы.
+   ============================================================ */
+.wm-window .browser-toolbar { padding: 4px 6px; }
+.wm-window .browser-btn     { min-width: 28px; height: 26px; font-size: 13px; }
+.wm-window .browser-url-input { height: 26px; font-size: 11px; }
+.wm-window .browser-bookmarks-bar { padding: 2px 6px; min-height: 24px; }
+.wm-window .browser-bookmark { height: 20px; font-size: 11px; padding: 0 6px; }
+.wm-window .browser-footer { padding: 3px 10px; font-size: 10px; }

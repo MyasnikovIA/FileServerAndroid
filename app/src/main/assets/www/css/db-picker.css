@@ -1,0 +1,239 @@
+/* ============ Модалка выбора изображения из БД ============ */
+.db-picker-content {
+    max-width: 1300px;
+    width: 100%;
+    height: 85vh;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.db-picker-body {
+    display: flex;
+    gap: 12px;
+    padding: 14px;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.db-picker-col {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.db-picker-list-col {
+    flex: 0 0 480px;
+    border-right: 1px solid #45475a;
+    padding-right: 12px;
+}
+
+.db-picker-preview-col {
+    flex: 1;
+    min-width: 0;
+}
+
+/* ---- Путь ---- */
+.db-picker-path-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #313244;
+    border: 1px solid #45475a;
+    border-radius: 5px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+}
+
+.db-picker-path-bar .db-picker-path {
+    flex: 1;
+    color: #a6e3a1;
+    font-family: monospace;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.db-picker-nav {
+    background: #585b70;
+    border: none;
+    color: #cdd6f4;
+    padding: 3px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.db-picker-nav:hover { background: #6c7086; }
+
+.db-picker-filter {
+    padding: 7px 10px;
+    background: #313244;
+    border: 1px solid #45475a;
+    border-radius: 5px;
+    color: #cdd6f4;
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+
+.db-picker-filter:focus {
+    outline: none;
+    border-color: #89b4fa;
+}
+
+/* ---- Список ---- */
+.db-picker-list {
+    flex: 1;
+    overflow-y: auto;
+    background: #181825;
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    padding: 4px;
+    font-family: monospace;
+    font-size: 12px;
+    user-select: none;
+}
+
+.db-picker-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #cdd6f4;
+}
+
+.db-picker-item:hover {
+    background: #313244;
+}
+
+.db-picker-item.focused {
+    background: #45475a;
+    outline: 1px solid #89b4fa;
+    outline-offset: -1px;
+}
+
+.db-picker-item.selected {
+    background: #585b70;
+    outline: 1px solid #89b4fa;
+    outline-offset: -1px;
+}
+
+.db-picker-item .db-picker-icon { flex-shrink: 0; }
+.db-picker-item.folder .db-picker-icon { color: #89b4fa; }
+.db-picker-item.file .db-picker-icon { color: #a6e3a1; }
+
+.db-picker-item .db-picker-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.db-picker-item .db-picker-meta {
+    color: #a6adc8;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.db-picker-item.parent-dir .db-picker-name {
+    color: #f9e2af;
+    font-weight: bold;
+}
+
+.db-picker-empty {
+    text-align: center;
+    color: #6c7086;
+    font-style: italic;
+    padding: 20px;
+    font-size: 12px;
+}
+
+/* ---- Превью ---- */
+.db-picker-preview-wrapper {
+    position: relative;
+    flex: 1;
+    background: #181825;
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 10px;
+    min-height: 200px;
+}
+
+.db-picker-preview-canvas {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.db-picker-preview-canvas img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.db-picker-preview-canvas pre {
+    color: #a6adc8;
+    font-size: 11px;
+    padding: 10px;
+    max-height: 100%;
+    overflow: auto;
+    width: 100%;
+    box-sizing: border-box;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.db-picker-preview-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c7086;
+    font-size: 13px;
+    text-align: center;
+    padding: 20px;
+    pointer-events: none;
+}
+
+.db-picker-preview-wrapper.loaded .db-picker-preview-placeholder {
+    display: none;
+}
+
+.db-picker-info {
+    font-size: 12px;
+    color: #a6adc8;
+    font-family: monospace;
+    min-height: 18px;
+    margin-bottom: 10px;
+    word-break: break-all;
+}
+
+.db-picker-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.db-picker-actions button {
+    padding: 8px 18px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+.db-picker-actions .btn-secondary { background: #585b70; color: #cdd6f4; }
+.db-picker-actions .btn-secondary:hover { background: #6c7086; }
+.db-picker-actions .btn-success { background: #a6e3a1; color: #1e1e2e; }
+.db-picker-actions .btn-success:hover { background: #94d98e; }
+.db-picker-actions .btn-success:disabled { opacity: 0.5; cursor: not-allowed; }

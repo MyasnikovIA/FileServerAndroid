@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- APK копируются сюда перед установкой -->
+    <cache-path name="apk_cache" path="apk/" />
+    <!-- Внутренние файлы (assets/www, config.json) -->
+    <files-path name="internal_files" path="." />
+</paths>

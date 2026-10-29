@@ -1,0 +1,59 @@
+<div id="videoViewerModal" class="modal-overlay hidden" onclick="FAR.closeVideoViewerOutside(event)">
+    <div class="modal-content video-modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="videoViewerTitle">🎬 Видео</h3>
+            <div class="modal-header-actions">
+                <button class="viewer-nav-btn" id="videoPrevBtn"
+                        onclick="FAR.viewerNavigate(-1)"
+                        title="Предыдущий файл">◀</button>
+                <button class="viewer-nav-btn" id="videoNextBtn"
+                        onclick="FAR.viewerNavigate(+1)"
+                        title="Следующий файл">▶</button>
+                <button class="close-btn" onclick="FAR.closeVideoViewer()">✕</button>
+            </div>
+        </div>
+
+        <div class="modal-body video-modal-body">
+            <div class="video-stage" id="videoStage">
+                <video id="videoElement" playsinline preload="metadata"></video>
+
+                <!-- Лоадер начальной загрузки -->
+                <div id="videoLoading" class="video-loading hidden">
+                    <div class="spinner"></div>
+                    <div class="loading-text" id="videoLoadingText">Загрузка видео…</div>
+                </div>
+
+                <!-- Индикатор фоновой подгрузки -->
+                <div id="videoBufferingBadge" class="video-buffering-badge hidden">
+                    <span class="dot"></span>
+                    <span id="videoBufferingText">буферизация…</span>
+                </div>
+
+                <!-- Полоса прокрутки времени (скрывается в fullscreen) -->
+                <div class="video-seekbar" id="videoSeekbar">
+                    <div class="video-seekbar-track" id="videoSeekTrack">
+                        <div class="video-seekbar-buffered" id="videoSeekBuffered"></div>
+                        <div class="video-seekbar-fill" id="videoSeekFill"></div>
+                        <div class="video-seekbar-thumb" id="videoSeekThumb"></div>
+                    </div>
+                    <div class="video-time-display" id="videoTimeDisplay">00:00 / 00:00</div>
+                </div>
+
+                <!-- Оверлей "нажмите, чтобы воспроизвести" -->
+                <div id="videoClickToPlay" class="video-click-overlay hidden" onclick="FAR.videoTogglePlay()">
+                    <div class="video-click-icon">▶</div>
+                    <div class="video-click-text">Нажмите, чтобы воспроизвести</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-footer video-modal-footer">
+            <span id="videoViewerInfo"></span>
+            <span id="videoLoadStatus" class="video-load-status"></span>
+            <button class="pano-modal-footer-btn" onclick="FAR.videoToggleFullscreen()" title="Развернуть на весь экран">
+                ⛶ Полный экран
+            </button>
+            <button onclick="FAR.downloadCurrentVideo()">📥 Скачать оригинал</button>
+        </div>
+    </div>
+</div>

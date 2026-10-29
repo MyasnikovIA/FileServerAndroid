@@ -1,0 +1,11 @@
+<div id="ollamaModal" class="modal-overlay hidden" onclick="FAR.closeOllamaOutside(event)">
+    <div class="modal-content ollama-modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="ollamaModalTitle">🦙 Ollama Chat</h3>
+            <div class="modal-header-actions">
+                <button class="close-btn" onclick="FAR.closeOllama()" title="Закрыть">✕</button>
+            </div>
+        </div>
+        <div class="ollama-host" id="ollamaModalHost"></div>
+    </div>
+</div>

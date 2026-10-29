@@ -1,0 +1,108 @@
+<div id="mp3ViewerModal" class="modal-overlay hidden" onclick="FAR.closeMp3ViewerOutside(event)">
+    <div class="modal-content mp3-modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="mp3ViewerTitle">🎵 MP3</h3>
+            <div class="modal-header-actions">
+                <button class="viewer-nav-btn" id="mp3PrevBtn"
+                        onclick="FAR.viewerNavigate(-1)"
+                        title="Предыдущий файл">◀</button>
+                <button class="viewer-nav-btn" id="mp3NextBtn"
+                        onclick="FAR.viewerNavigate(+1)"
+                        title="Следующий файл">▶</button>
+                <button class="close-btn" onclick="FAR.closeMp3Viewer()">✕</button>
+            </div>
+        </div>
+
+        <div class="modal-body mp3-modal-body">
+            <div id="mp3Winamp" class="mp3-winamp">
+
+                <!-- ==== Основное окно Winamp ==== -->
+                <div class="winamp-main">
+
+                    <!-- Заголовок-«титульник» с полосками -->
+                    <div class="winamp-titlebar">
+                        <div class="winamp-titlebar-stripes"></div>
+                        <span class="winamp-title">WINAMP</span>
+                        <div class="winamp-titlebar-spacer"></div>
+                        <button class="winamp-btn-close" onclick="FAR.closeMp3Viewer()" title="Закрыть">✕</button>
+                    </div>
+
+                    <!-- Дисплей: время + битрейт + kbps + kHz + mono/stereo -->
+                    <div class="winamp-display">
+                        <div class="winamp-display-row">
+                            <span class="winamp-time" id="mp3Time">00:00</span>
+                            <span class="winamp-kbps" id="mp3Kbps">--</span>
+                            <span class="winamp-khz"  id="mp3Khz">--</span>
+                            <span class="winamp-ch"   id="mp3Ch">--</span>
+                        </div>
+                        <div class="winamp-visualizer" id="mp3Visualizer"></div>
+                        <div class="winamp-marquee" id="mp3Marquee">FileBD MP3 Player</div>
+                    </div>
+
+                    <!-- Полоса прокрутки -->
+                    <div class="winamp-seek" id="mp3Seek" onclick="FAR.mp3SeekClick(event)">
+                        <div class="winamp-seek-fill" id="mp3SeekFill"></div>
+                        <div class="winamp-seek-thumb" id="mp3SeekThumb"></div>
+                    </div>
+
+                    <!-- Кнопки управления -->
+                    <div class="winamp-controls">
+                        <button class="winamp-btn" onclick="FAR.mp3Prev()" title="Предыдущий">⏮</button>
+                        <button class="winamp-btn" onclick="FAR.mp3Rewind()" title="-5 сек">◀◀</button>
+                        <button class="winamp-btn winamp-btn-play" id="mp3BtnPlay" onclick="FAR.mp3TogglePlay()" title="Play/Pause">▶</button>
+                        <button class="winamp-btn" onclick="FAR.mp3Stop()" title="Стоп">■</button>
+                        <button class="winamp-btn" onclick="FAR.mp3Forward()" title="+5 сек">▶▶</button>
+                        <button class="winamp-btn" onclick="FAR.mp3Next()" title="Следующий">⏭</button>
+                    </div>
+
+                    <!-- Режимы воспроизведения -->
+                    <div class="winamp-modes">
+                        <button class="winamp-mode-btn" id="mp3BtnRepeat"
+                                onclick="FAR.mp3ToggleRepeat()"
+                                title="Повтор плейлиста">🔁 REPEAT</button>
+                        <button class="winamp-mode-btn" id="mp3BtnShuffle"
+                                onclick="FAR.mp3ToggleShuffle()"
+                                title="Случайный порядок">🔀 SHUFFLE</button>
+                    </div>
+
+                    <!-- Громкость и баланс -->
+                    <div class="winamp-sliders">
+                        <div class="winamp-slider-block">
+                            <label>VOL</label>
+                            <input type="range" id="mp3Volume" min="0" max="100" value="80"
+                                   oninput="FAR.mp3SetVolume(this.value)">
+                        </div>
+                        <div class="winamp-slider-block">
+                            <label>BAL</label>
+                            <input type="range" id="mp3Balance" min="-100" max="100" value="0"
+                                   oninput="FAR.mp3SetBalance(this.value)">
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ==== Плейлист ==== -->
+                <div class="winamp-playlist">
+                    <div class="winamp-pl-titlebar">
+                        <span>PLAYLIST</span>
+                    </div>
+                    <div class="winamp-pl-list" id="mp3Playlist"></div>
+                    <div class="winamp-pl-footer">
+                        <span id="mp3PlaylistInfo">—</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <div id="mp3Loading" class="mp3-loading hidden">
+                <div class="spinner"></div>
+                <div class="loading-text" id="mp3LoadingText">Загрузка MP3…</div>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <span id="mp3ViewerInfo"></span>
+            <button onclick="FAR.downloadCurrentMp3()">📥 Скачать оригинал</button>
+        </div>
+    </div>
+</div>

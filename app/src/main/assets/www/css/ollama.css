@@ -1,0 +1,748 @@
+/* ============================================================
+   Модуль «Ollama Chat»
+   ============================================================ */
+
+.ollama-modal-content {
+    max-width: 100vw;
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    border: none;
+    display: flex;
+    flex-direction: column;
+}
+
+#ollamaModal { z-index: 7000; }
+
+.ollama-host {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: #1e1e2e;
+    overflow: hidden;
+}
+
+/* ---------- Тулбар ---------- */
+.ollama-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #232333;
+    border-bottom: 1px solid #313244;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.ollama-model-select {
+    flex: 0 1 260px;
+    min-width: 160px;
+    padding: 6px 10px;
+    background: #181825;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    color: #cdd6f4;
+    font-family: monospace;
+    font-size: 12px;
+    outline: none;
+}
+.ollama-model-select:focus { border-color: #89b4fa; }
+
+.ollama-btn {
+    padding: 6px 12px;
+    background: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    white-space: nowrap;
+    transition: background 0.12s;
+}
+.ollama-btn:hover:not(:disabled) { background: #45475a; }
+.ollama-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.ollama-btn-primary {
+    background: #89b4fa;
+    color: #1e1e2e;
+    border-color: #89b4fa;
+}
+.ollama-btn-primary:hover:not(:disabled) { background: #74c7ec; border-color: #74c7ec; }
+
+.ollama-btn-danger {
+    background: #f38ba8;
+    color: #1e1e2e;
+    border-color: #f38ba8;
+}
+.ollama-btn-danger:hover:not(:disabled) { background: #e06c8a; }
+
+.ollama-status {
+    font-size: 11px;
+    color: #a6adc8;
+    padding: 4px 10px;
+    border-radius: 3px;
+    background: #1a1a24;
+    border: 1px solid #313244;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ollama-status.ok    { color: #a6e3a1; border-color: #a6e3a1; }
+.ollama-status.warn  { color: #f9e2af; border-color: #f9e2af; }
+.ollama-status.error { color: #f38ba8; border-color: #f38ba8; }
+.ollama-status.load  { color: #89b4fa; border-color: #89b4fa; }
+
+/* ---------- Тело ---------- */
+.ollama-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    overflow: hidden;
+}
+
+.ollama-chat {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: #1e1e2e;
+    scroll-behavior: smooth;
+}
+
+.ollama-sidebar {
+    flex: 0 0 340px;
+    background: #181825;
+    border-left: 1px solid #313244;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.ollama-sidebar.collapsed { display: none; }
+
+/* ---------- Tabs в sidebar ---------- */
+.ollama-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 6px 6px 0;
+    background: #1a1a24;
+    border-bottom: 1px solid #313244;
+    flex-shrink: 0;
+}
+.ollama-tab {
+    flex: 1;
+    padding: 6px 4px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #6c7086;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: bold;
+    white-space: nowrap;
+    transition: color 0.12s, border-color 0.12s;
+    font-family: inherit;
+}
+.ollama-tab:hover { color: #cdd6f4; }
+.ollama-tab.active {
+    color: #89b4fa;
+    border-bottom-color: #89b4fa;
+}
+
+.ollama-tab-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 10px;
+}
+.ollama-tab-content.hidden { display: none; }
+
+.ollama-sidebar-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ollama-sidebar-label {
+    font-size: 11px;
+    color: #89b4fa;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: bold;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #313244;
+}
+
+.ollama-sidebar-actions,
+.ollama-files-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.ollama-context-input {
+    width: 100%;
+    min-height: 180px;
+    max-height: 400px;
+    padding: 8px 10px;
+    background: #1e1e2e;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    color: #cdd6f4;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    outline: none;
+    resize: vertical;
+}
+.ollama-context-input:focus { border-color: #89b4fa; }
+
+/* ---------- Список файлов ---------- */
+.ollama-files-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.ollama-file-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    background: #1e1e2e;
+    border: 1px solid #313244;
+    border-radius: 5px;
+    font-size: 12px;
+}
+
+.ollama-file-item.disabled {
+    opacity: 0.5;
+    background: #15151e;
+}
+
+.ollama-file-item .file-check {
+    flex-shrink: 0;
+    margin-top: 2px;
+    cursor: pointer;
+}
+
+.ollama-file-item .file-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ollama-file-item .file-name {
+    color: #cdd6f4;
+    font-weight: bold;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ollama-file-item .file-meta {
+    color: #6c7086;
+    font-size: 10px;
+    font-family: monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ollama-file-item.error .file-meta { color: #f38ba8; }
+
+.ollama-file-item .file-remove {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    color: #f38ba8;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 4px;
+    border-radius: 3px;
+}
+.ollama-file-item .file-remove:hover { background: #313244; }
+
+.ollama-files-empty,
+.ollama-gpu-empty,
+.ollama-gpu-error {
+    font-size: 11px;
+    color: #6c7086;
+    font-style: italic;
+    padding: 14px 10px;
+    text-align: center;
+    background: #1a1a24;
+    border-radius: 4px;
+}
+.ollama-gpu-error { color: #f38ba8; }
+
+.ollama-files-summary {
+    font-size: 10px;
+    color: #6c7086;
+    font-family: monospace;
+    padding: 4px 8px;
+    background: #1a1a24;
+    border-radius: 4px;
+    text-align: center;
+}
+
+/* ---------- GPU ---------- */
+.ollama-gpu-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ollama-gpu-card {
+    background: #1e1e2e;
+    border: 1px solid #313244;
+    border-radius: 6px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ollama-gpu-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding-bottom: 4px;
+    border-bottom: 1px dashed #313244;
+}
+
+.ollama-gpu-idx {
+    background: #89b4fa;
+    color: #1e1e2e;
+    font-weight: bold;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-family: monospace;
+}
+
+.ollama-gpu-name {
+    flex: 1;
+    color: #cdd6f4;
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ollama-gpu-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #a6adc8;
+}
+.ollama-gpu-row.small {
+    font-size: 10px;
+    color: #6c7086;
+    gap: 12px;
+}
+.ollama-gpu-val {
+    color: #cdd6f4;
+    font-family: monospace;
+    min-width: 60px;
+    text-align: right;
+}
+.ollama-gpu-bar {
+    flex: 1;
+    height: 6px;
+    background: #313244;
+    border-radius: 3px;
+    overflow: hidden;
+    min-width: 40px;
+}
+.ollama-gpu-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #89b4fa, #74c7ec);
+    border-radius: 3px;
+    transition: width 0.25s ease;
+}
+.ollama-gpu-bar-fill.mem {
+    background: linear-gradient(90deg, #a6e3a1, #94d98e);
+}
+
+/* ---------- Сообщения ---------- */
+.ollama-msg {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 92%;
+}
+.ollama-msg.user      { align-self: flex-end;   align-items: flex-end; }
+.ollama-msg.assistant { align-self: flex-start; align-items: flex-start; }
+
+.ollama-msg-header {
+    font-size: 11px;
+    color: #6c7086;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0 6px;
+}
+.ollama-msg.user .ollama-msg-header { color: #89b4fa; }
+.ollama-msg.assistant .ollama-msg-header { color: #a6e3a1; }
+
+.ollama-msg-body {
+    background: #313244;
+    color: #cdd6f4;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.55;
+    word-break: break-word;
+    max-width: 100%;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.ollama-msg.user .ollama-msg-body {
+    background: #2b3a52;
+    color: #e6e6e6;
+    white-space: pre-wrap;
+}
+.ollama-msg.assistant .ollama-msg-body {
+    background: #232333;
+    border-left: 2px solid #a6e3a1;
+    white-space: normal;
+}
+.ollama-msg.system .ollama-msg-body {
+    background: #3a2a2a;
+    color: #f38ba8;
+    border-left: 2px solid #f38ba8;
+    font-style: italic;
+}
+
+.ollama-msg-meta {
+    font-size: 10px;
+    color: #585b70;
+    padding: 0 6px;
+    font-family: monospace;
+}
+
+.ollama-cursor {
+    display: inline-block;
+    width: 8px;
+    height: 14px;
+    background: #a6e3a1;
+    vertical-align: text-bottom;
+    animation: ollamaBlink 0.9s steps(2) infinite;
+    margin-left: 2px;
+}
+@keyframes ollamaBlink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+}
+
+.ollama-empty {
+    text-align: center;
+    color: #6c7086;
+    font-style: italic;
+    padding: 40px 20px;
+    font-size: 13px;
+}
+
+/* ---------- Markdown: инлайн-код ---------- */
+.ollama-msg-body code {
+    background: #181825;
+    color: #f9e2af;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 12px;
+    white-space: pre;
+}
+
+.ollama-msg-body strong { color: #f9e2af; }
+.ollama-msg-body em     { color: #cba6f7; }
+
+/* ---------- Markdown: блоки кода ---------- */
+.ollama-msg-body .code-block {
+    position: relative;
+    margin: 10px 0;
+    background: #181825;
+    border: 1px solid #313244;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.ollama-msg-body .code-block .code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 10px;
+    background: #11111b;
+    border-bottom: 1px solid #313244;
+    font-size: 11px;
+    min-height: 24px;
+}
+
+.ollama-msg-body .code-lang {
+    color: #6c7086;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: monospace;
+    font-size: 10px;
+}
+
+.ollama-msg-body .code-copy {
+    background: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 3px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: inherit;
+    transition: background 0.12s, color 0.12s;
+}
+.ollama-msg-body .code-copy:hover { background: #45475a; }
+.ollama-msg-body .code-copy.copied {
+    background: #a6e3a1;
+    color: #1e1e2e;
+    border-color: #a6e3a1;
+}
+
+.ollama-msg-body .code-block pre {
+    margin: 0;
+    padding: 10px 12px;
+    overflow-x: auto;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #cdd6f4;
+    white-space: pre;
+    word-break: normal;
+    tab-size: 4;
+}
+.ollama-msg-body .code-block pre code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+    border-radius: 0;
+    font-family: inherit;
+    font-size: inherit;
+    white-space: pre;
+}
+
+/* ---------- Input row ---------- */
+.ollama-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    padding: 10px 12px;
+    background: #232333;
+    border-top: 1px solid #313244;
+    flex-shrink: 0;
+}
+
+.ollama-input {
+    flex: 1;
+    min-height: 38px;
+    max-height: 160px;
+    padding: 8px 12px;
+    background: #181825;
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    color: #cdd6f4;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.4;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.12s;
+}
+.ollama-input:focus { border-color: #89b4fa; }
+.ollama-input:disabled { opacity: 0.5; }
+
+.ollama-input-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+/* ---------- Мини-модалка выбора файлов ---------- */
+.ollama-fs-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 9000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+.ollama-fs-modal.hidden { display: none; }
+
+.ollama-fs-dialog {
+    background: #1e1e2e;
+    border: 1px solid #45475a;
+    border-radius: 8px;
+    width: 720px;
+    max-width: 100%;
+    height: 560px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+
+.ollama-fs-dialog header {
+    padding: 10px 14px;
+    background: #232333;
+    border-bottom: 1px solid #313244;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border-radius: 8px 8px 0 0;
+}
+
+.ollama-fs-dialog header h4 {
+    margin: 0;
+    font-size: 13px;
+    color: #89b4fa;
+}
+
+.ollama-fs-dialog .fs-pathbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: #232333;
+    border-bottom: 1px solid #313244;
+    font-family: monospace;
+    font-size: 12px;
+    color: #a6e3a1;
+}
+
+.ollama-fs-dialog .fs-pathbar input {
+    flex: 1;
+    padding: 4px 8px;
+    background: #181825;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    color: #cdd6f4;
+    font-family: monospace;
+    font-size: 12px;
+    outline: none;
+}
+
+.ollama-fs-dialog .fs-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    background: #12121c;
+    padding: 4px;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.ollama-fs-dialog .fs-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+}
+.ollama-fs-dialog .fs-item:hover { background: #232333; }
+.ollama-fs-dialog .fs-item.disabled { opacity: 0.4; cursor: not-allowed; }
+.ollama-fs-dialog .fs-item input[type="checkbox"] { cursor: pointer; }
+.ollama-fs-dialog .fs-item .fs-icon { width: 16px; flex-shrink: 0; }
+.ollama-fs-dialog .fs-item .fs-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ollama-fs-dialog .fs-item .fs-size { color: #6c7086; font-size: 11px; }
+.ollama-fs-dialog .fs-item.folder .fs-name { color: #89b4fa; }
+.ollama-fs-dialog .fs-item.file   .fs-name { color: #a6e3a1; }
+.ollama-fs-dialog .fs-item.file.not-text .fs-name { color: #6c7086; }
+
+.ollama-fs-dialog footer {
+    padding: 10px 14px;
+    background: #232333;
+    border-top: 1px solid #313244;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border-radius: 0 0 8px 8px;
+}
+.ollama-fs-dialog footer .fs-info {
+    flex: 1;
+    font-size: 11px;
+    color: #a6adc8;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---------- WM-адаптация ---------- */
+.wm-window .ollama-toolbar { padding: 6px 8px; gap: 6px; }
+.wm-window .ollama-chat { padding: 10px 14px; gap: 10px; }
+.wm-window .ollama-sidebar { flex-basis: 300px; }
+.wm-window .ollama-input-row { padding: 8px; }
+
+/* ============================================================
+   Drop-overlay для drag&drop файлов в окно Ollama
+   ============================================================ */
+
+.ollama-host {
+    position: relative;
+}
+
+.wm-window .wm-body {
+    position: relative;
+}
+
+.ollama-drop-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(137, 180, 250, 0.12);
+    border: 3px dashed #89b4fa;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    pointer-events: none;
+    z-index: 100;
+    color: #89b4fa;
+    font-size: 15px;
+    font-weight: bold;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+}
+
+.ollama-drop-overlay.hidden { display: none; }
+
+.ollama-drop-icon {
+    font-size: 56px;
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
+}
+
+.ollama-drop-text {
+    max-width: 80%;
+    text-align: center;
+    line-height: 1.4;
+    padding: 0 20px;
+}

@@ -1,0 +1,86 @@
+/* Модалка просмотра панорам */
+.pano-modal-content {
+    max-width: 1400px;
+    width: 100%;
+    height: 90vh;
+    max-height: 90vh;
+}
+
+.pano-modal-body {
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+    background: #000;
+    min-height: 400px;
+}
+
+.panorama-canvas {
+    width: 100%;
+    height: 100%;
+    min-height: 400px;
+    position: relative;
+}
+
+.panorama-canvas .pnlm-container {
+    border-radius: 0;
+}
+
+/* Оверлей загрузки поверх канваса */
+.panorama-loading {
+    position: absolute;
+    inset: 0;
+    background: rgba(30, 30, 46, 0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    z-index: 10;
+}
+
+.panorama-loading.hidden {
+    display: none;
+}
+
+.panorama-loading .spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid #313244;
+    border-top-color: #89b4fa;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.panorama-loading .loading-text {
+    color: #a6adc8;
+    font-size: 14px;
+}
+
+/* Убираем фон Pannellum, чтобы не мешал */
+.panorama-canvas .pnlm-preview-img {
+    background-color: #000;
+}
+
+/* Адаптив для мобильных */
+@media (max-width: 768px) {
+    .pano-modal-content {
+        height: 95vh;
+        max-height: 95vh;
+    }
+}
+
+/* Подсказка про двойной клик в футере модалки просмотра панорамы */
+.pano-dblclick-hint {
+    font-size: 11px;
+    color: #a6adc8;
+    font-style: italic;
+    margin-right: auto;
+    padding-left: 8px;
+    cursor: help;
+}
+
+@media (max-width: 768px) {
+    .pano-dblclick-hint {
+        display: none;
+    }
+}

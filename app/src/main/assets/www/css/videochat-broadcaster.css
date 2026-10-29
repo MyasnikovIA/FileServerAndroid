@@ -1,0 +1,142 @@
+/* ============================================================
+   Модалка «Начать трансляцию» (launcher плагина WebRTC)
+   ============================================================ */
+
+#videoChatBroadcasterModal { z-index: 7000; }
+
+.videochat-broadcaster-content {
+    max-width: 560px;
+    width: 100%;
+    max-height: 90vh;
+}
+
+.videochat-broadcaster-body {
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.vc-bc-block {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* ---- Статус плагина ---- */
+.vc-bc-status-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #181825;
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    transition: border-color 0.15s;
+}
+
+.vc-bc-status-row.ok   { border-color: #a6e3a1; }
+.vc-bc-status-row.err  { border-color: #f38ba8; }
+.vc-bc-status-row.warn { border-color: #f9e2af; }
+
+.vc-bc-status-icon {
+    font-size: 22px;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.vc-bc-status-text {
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.45;
+    color: #cdd6f4;
+    word-break: break-word;
+}
+
+.vc-bc-status-text b { color: #89b4fa; }
+.vc-bc-status-text small { color: #a6adc8; font-size: 11px; }
+.vc-bc-status-text code {
+    background: #0e0e16;
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #f9e2af;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+/* ---- Поле «комната» ---- */
+.vc-bc-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.vc-bc-field label {
+    font-size: 12px;
+    color: #a6adc8;
+}
+
+.vc-bc-input {
+    padding: 8px 10px;
+    background: #313244;
+    border: 1px solid #45475a;
+    border-radius: 5px;
+    color: #cdd6f4;
+    font-family: monospace;
+    font-size: 13px;
+    outline: none;
+}
+
+.vc-bc-input:focus { border-color: #89b4fa; }
+.vc-bc-input:disabled { opacity: 0.5; }
+
+/* ---- Кнопки ---- */
+.vc-bc-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.vc-bc-btn {
+    flex: 1;
+    min-width: 120px;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 13px;
+    transition: background 0.12s;
+    background: #89b4fa;
+    color: #1e1e2e;
+}
+
+.vc-bc-btn:hover:not(:disabled) { background: #74c7ec; }
+.vc-bc-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.vc-bc-start { background: #a6e3a1; }
+.vc-bc-start:hover:not(:disabled) { background: #94d98e; }
+
+.vc-bc-stop  { background: #f38ba8; }
+.vc-bc-stop:hover:not(:disabled)  { background: #e06c8a; }
+
+.vc-bc-watch { background: #f9e2af; }
+.vc-bc-watch:hover:not(:disabled) { background: #f5d38a; }
+
+/* ---- Подсказка ---- */
+.vc-bc-hint {
+    font-size: 11px;
+    color: #6c7086;
+    line-height: 1.5;
+    padding: 10px 12px;
+    background: #181825;
+    border-radius: 5px;
+    border-left: 3px solid #89b4fa;
+}
+
+.vc-bc-hint code {
+    background: #0e0e16;
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #f9e2af;
+    font-family: monospace;
+}

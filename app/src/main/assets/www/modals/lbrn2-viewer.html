@@ -1,0 +1,24 @@
+<div id="lbrn2ViewerModal" class="modal-overlay hidden" onclick="FAR.closeLbrn2ViewerOutside(event)">
+    <div class="modal-content lbrn2-modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="lbrn2ViewerTitle">🔦 LightBurn</h3>
+            <div class="modal-header-actions">
+                <button class="viewer-nav-btn" id="lbrn2PrevBtn" onclick="FAR.viewerNavigate(-1)" title="Предыдущий файл">◀</button>
+                <button class="viewer-nav-btn" id="lbrn2NextBtn" onclick="FAR.viewerNavigate(+1)" title="Следующий файл">▶</button>
+                <button class="close-btn" onclick="FAR.closeLbrn2Viewer()">✕</button>
+            </div>
+        </div>
+        <div class="modal-body lbrn2-modal-body">
+            <div id="lbrn2Root" class="lbrn2-root"></div>
+            <div id="lbrn2Loading" class="lbrn2-loading">
+                <div class="spinner"></div>
+                <div class="lbrn2-loading-text" id="lbrn2LoadingText">Загрузка проекта…</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <span id="lbrn2ViewerInfo"></span>
+            <span class="lbrn2-hint">Вращение: колесо · Панорама: ЛКМ · Сброс: двойной клик</span>
+            <button onclick="FAR.downloadCurrentLbrn2()">💾 Скачать SVG</button>
+        </div>
+    </div>
+</div>

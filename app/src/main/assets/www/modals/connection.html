@@ -1,0 +1,50 @@
+<div id="connModal" class="modal-overlay hidden">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="connTitle">🔐 Подключение к FileServer</h3>
+            <button class="close-btn" id="connCloseBtn" onclick="FAR.closeConnModal()" style="display:none;">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="conn-form">
+                <div class="conn-target" id="connTarget" style="display:none;">
+                    Подключение только для панели: <b id="connTargetName">—</b>
+                </div>
+
+                <div class="conn-field">
+                    <label for="connUrl">Адрес FileServer</label>
+                    <input type="text" id="connUrl" placeholder="http://127.0.0.1:8080" autocomplete="off">
+                </div>
+
+                <div class="conn-field">
+                    <label for="connUser">Имя пользователя</label>
+                    <input type="text" id="connUser" placeholder="admin" autocomplete="username">
+                </div>
+
+                <div class="conn-field">
+                    <label for="connPass">Пароль</label>
+                    <input type="password" id="connPass" placeholder="••••••••" autocomplete="current-password">
+                </div>
+
+                <div class="conn-field" id="connUiModeRow">
+                    <label for="connUiMode">Режим работы после подключения</label>
+                    <select id="connUiMode" style="color:#1e1e2e;">
+                        <option value="panel">🗔 Панельный (FAR-подобный)</option>
+                        <option value="wm">🖥 Оконный (рабочий стол)</option>
+                    </select>
+                </div>
+
+                <div class="conn-error" id="connError"></div>
+                <div class="conn-hint">
+                    Данные подключения сохраняются в LocalStorage браузера.
+                    Токен доступа живёт 24 часа.
+                    <br>
+                    Если сервер недоступен напрямую, соединение будет установлено через прокси текущего сервера.
+                </div>
+                <div class="conn-actions">
+                    <button class="btn-cancel" onclick="FAR.closeConnModal()" id="connCancelBtn" style="color:#1e1e2e;">Отмена</button>
+                    <button class="btn-connect" id="connConnectBtn" onclick="FAR.submitConnModal()" style="color:#1e1e2e;">Подключиться</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

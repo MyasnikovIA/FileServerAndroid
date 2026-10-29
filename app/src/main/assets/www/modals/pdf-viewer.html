@@ -1,0 +1,28 @@
+<div id="pdfViewerModal" class="modal-overlay hidden" onclick="FAR.closePdfViewerOutside(event)">
+    <div class="modal-content pdf-modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="pdfViewerTitle">📄 PDF</h3>
+            <div class="modal-header-actions">
+                <button class="viewer-nav-btn" id="pdfPrevBtn"
+                        onclick="FAR.viewerNavigate(-1)"
+                        title="Предыдущий файл">◀</button>
+                <button class="viewer-nav-btn" id="pdfNextBtn"
+                        onclick="FAR.viewerNavigate(+1)"
+                        title="Следующий файл">▶</button>
+                <button class="close-btn" onclick="FAR.closePdfViewer()">✕</button>
+            </div>
+        </div>
+        <div class="modal-body pdf-modal-body">
+            <div id="pdfRoot" class="pdf-root"></div>
+            <div id="pdfLoading" class="pdf-loading">
+                <div class="spinner"></div>
+                <div class="pdf-loading-text" id="pdfLoadingText">Загрузка PDF…</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <span id="pdfViewerInfo"></span>
+            <span class="pdf-pages-hint">Просмотр через встроенный PDF-viewer браузера</span>
+            <button onclick="FAR.downloadCurrentPdf()">📥 Скачать оригинал</button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,38 @@
+<div id="wmRoot">
+    <div id="wmDesktop">
+        <div class="wm-desktop-icons" id="wmDesktopIcons"></div>
+    </div>
+
+    <div id="wmSnapPreview"></div>
+    <div id="wmWindowsLayer"></div>
+
+    <div id="wmStartMenu">
+        <div class="wm-start-search">
+            <input type="text" id="wmStartSearch" placeholder="Поиск приложений…" autocomplete="off">
+        </div>
+        <div class="wm-start-list" id="wmStartList"></div>
+        <div class="wm-start-footer">
+            <span id="wmStartUser">FileBD Manager</span>
+            <button onclick="FAR.WM.logout()">🔓 Выход</button>
+        </div>
+    </div>
+
+    <div id="wmContextMenu"></div>
+
+    <div id="wmTaskbar">
+        <button id="wmStartBtn" title="Пуск">⊞</button>
+        <div class="wm-tb-sep"></div>
+        <div id="wmTaskButtons"></div>
+        <div class="wm-tb-spacer"></div>
+        <div class="wm-tray">
+            <div class="wm-tray-item" id="wmTrayDb" title="Подключение к БД">🗄️ <span>—</span></div>
+            <div class="wm-tray-item" id="wmTrayGamepad" title="Режим джойстика">🎮 <span>Файлы</span></div>
+            <div class="wm-tray-item" id="wmTrayProgress" title="Прогресс" style="display:none;">⏳ <span>0%</span></div>
+            <div class="wm-tray-item" id="wmTrayFullscreen" title="Полноэкранный режим (F11)">⛶ <span>Fullscreen</span></div>
+            <div class="wm-tray-clock" id="wmTrayClock">
+                <div>--:--</div>
+                <div class="wm-clock-date">--.--.----</div>
+            </div>
+        </div>
+    </div>
+</div>

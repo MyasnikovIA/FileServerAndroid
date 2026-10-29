@@ -1,0 +1,125 @@
+.panels { display: flex; gap: 10px; flex: 1; min-height: 0; }
+.panel {
+    flex: 1; display: flex; flex-direction: column;
+    background: #313244; border-radius: 8px;
+    border: 1px solid #45475a; overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    position: relative;
+}
+.panel.active { border-color: #89b4fa; box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.3); }
+.panel.drag-over {
+    border-color: #a6e3a1;
+    box-shadow: 0 0 0 3px rgba(166, 227, 161, 0.4);
+    background: #2a3a2e;
+}
+.panel.drag-over .panel-header { background: #3a5a3e; }
+.panel .drop-hint {
+    position: absolute; inset: 0;
+    background: rgba(166, 227, 161, 0.15);
+    border: 3px dashed #a6e3a1; border-radius: 8px;
+    display: none; align-items: center; justify-content: center;
+    flex-direction: column; gap: 10px;
+    color: #a6e3a1; font-size: 15px; font-weight: bold;
+    pointer-events: none; z-index: 10;
+}
+.panel.drag-over .drop-hint { display: flex; }
+.panel .drop-hint .drop-icon { font-size: 40px; }
+.panel .drop-hint .drop-path {
+    font-family: monospace; font-size: 13px; color: #cdd6f4;
+    background: rgba(0,0,0,0.4); padding: 4px 12px; border-radius: 5px;
+    max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.panel-header {
+    padding: 8px 12px; background: #45475a;
+    font-weight: bold; font-size: 13px;
+    display: flex; justify-content: space-between;
+    align-items: center; flex-shrink: 0;
+}
+.panel.active .panel-header { background: #4a5068; }
+.panel-header .path {
+    cursor: pointer;
+    transition: color 0.15s;
+}
+.panel-header .path:hover {
+    color: #89b4fa;
+    text-decoration: underline dotted;
+}
+
+.panel-header .nav-buttons { display: flex; gap: 4px; }
+.panel-header .nav-buttons button {
+    background: #585b70; border: none; color: #cdd6f4;
+    padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;
+}
+.panel-header .nav-buttons button:hover { background: #6c7086; }
+.file-list {
+    flex: 1; overflow-y: auto; padding: 4px;
+    font-family: monospace; font-size: 12px; user-select: none;
+}
+.file-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 3px 8px; border-bottom: 1px solid #45475a;
+    cursor: pointer; transition: background 0.15s;
+}
+.file-item:hover { background: #45475a; }
+
+/* Выделенный элемент (участвует в групповом выделении) */
+.file-item.selected {
+    background: #45475a;
+    outline: 1px dashed #89b4fa; outline-offset: -1px;
+}
+
+/* Курсор — текущая позиция навигации */
+.file-item.focused {
+    background: #585b70;
+    outline: 1px solid #89b4fa; outline-offset: -1px;
+    box-shadow: inset 0 0 0 1px #89b4fa;
+}
+
+/* Курсор + выделен (Shift-навигация по диапазону) */
+.file-item.focused.selected {
+    background: #585b70;
+    outline: 1px solid #89b4fa; outline-offset: -1px;
+    box-shadow: inset 0 0 0 1px #89b4fa;
+}
+
+.file-item.parent-dir .name { color: #f9e2af; font-weight: bold; }
+.file-item .name {
+    color: #cdd6f4; flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.file-item .name.folder { color: #89b4fa; }
+.file-item .name.file { color: #a6e3a1; }
+.file-item .meta {
+    color: #a6adc8; font-size: 0.8em; margin-left: 10px; flex-shrink: 0;
+}
+
+
+.path { cursor: pointer; }
+.path:hover { text-decoration: underline dotted; }
+
+.db-badge {
+    display: inline-block;
+    margin-right: 6px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: #313244;
+    color: #a6e3a1;
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
+}
+.db-badge:hover { background: #45475a; }
+
+.file-list {
+    position: relative;
+    overflow-y: auto;
+}
+
+.file-list-spacer {
+    position: relative;
+    width: 100%;
+}
+
+.file-item {
+    box-sizing: border-box;
+}

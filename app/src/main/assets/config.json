@@ -1,0 +1,25 @@
+{
+  "http": {
+    "port": 8080,
+    "host": "0.0.0.0"
+  },
+  "web": "www",
+  "users": [
+    {
+      "name": "admin",
+      "password": "admin",
+      "quota": -1,
+      "console": false
+    }
+  ],
+  "shares": [
+    {
+      "name": "",
+      "physical": "/storage/emulated/0",
+      "type": "folder",
+      "access": ["read", "write", "delete"],
+      "anonymous": false,
+      "users": ["admin"]
+    }
+  ]
+}

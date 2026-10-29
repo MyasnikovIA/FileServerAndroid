@@ -1,0 +1,28 @@
+<div id="emulatorViewerModal" class="modal-overlay hidden" onclick="FAR.closeEmulatorViewerOutside(event)">
+    <div class="modal-content emulator-modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="emulatorViewerTitle">🕹️ Эмулятор</h3>
+            <div class="modal-header-actions">
+                <button class="viewer-nav-btn" id="emuPrevBtn"
+                        onclick="FAR.viewerNavigate(-1)"
+                        title="Предыдущий файл">◀</button>
+                <button class="viewer-nav-btn" id="emuNextBtn"
+                        onclick="FAR.viewerNavigate(+1)"
+                        title="Следующий файл">▶</button>
+                <button class="close-btn" onclick="FAR.closeEmulatorViewer()">✕</button>
+            </div>
+        </div>
+        <div class="modal-body emulator-modal-body">
+            <div id="emulatorRoot" class="emulator-root"></div>
+            <div id="emulatorLoading" class="emulator-loading">
+                <div class="spinner"></div>
+                <div class="emulator-loading-text" id="emulatorLoadingText">Загрузка эмулятора…</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <span id="emulatorViewerInfo"></span>
+            <span class="emulator-core-hint" id="emulatorCoreHint"></span>
+            <button onclick="FAR.downloadCurrentEmulator()">📥 Скачать оригинал</button>
+        </div>
+    </div>
+</div>

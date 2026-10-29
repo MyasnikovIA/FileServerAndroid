@@ -1,0 +1,132 @@
+<div id="panoramaEditorModal" class="modal-overlay hidden" onclick="FAR.closePanoramaEditorOutside(event)">
+    <div class="modal-content pano-editor-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="panoEditorTitle">✏️ Редактор точек перехода</h3>
+            <button class="close-btn" onclick="FAR.closePanoramaEditor()">✕</button>
+        </div>
+
+        <div class="modal-body pano-editor-body">
+
+            <!-- ЛЕВАЯ КОЛОНКА: форма хотспота -->
+            <div class="pano-editor-col pano-editor-form">
+
+                <h4>Точка перехода</h4>
+
+                <div class="pe-field">
+                    <label>Название</label>
+                    <input type="text" id="peName" placeholder="Например: Кухня" maxlength="100">
+                </div>
+
+                <div class="pe-field">
+                    <label>Тип</label>
+                    <select id="peType">
+                        <option value="scene">Сцена (переход)</option>
+                        <option value="info">Информация</option>
+                    </select>
+                </div>
+
+                <div class="pe-field">
+                    <label>Текст подсказки</label>
+                    <input type="text" id="peText" placeholder="Перейти в ..." maxlength="200">
+                </div>
+
+                <h4>Координаты на текущей панораме</h4>
+                <div class="pe-coords-row">
+                    <div class="pe-field pe-field-half">
+                        <label>Yaw</label>
+                        <input type="number" id="peYaw" step="0.01" value="0">
+                    </div>
+                    <div class="pe-field pe-field-half">
+                        <label>Pitch</label>
+                        <input type="number" id="pePitch" step="0.01" value="0">
+                    </div>
+                </div>
+                <div class="pe-hint">Двойной клик по панораме — задать координаты точки.</div>
+
+                <h4>Целевая сцена (из PouchDB)</h4>
+
+                <div class="pe-field">
+                    <label>Путь к файлу в БД</label>
+                    <div class="pe-db-browse">
+                        <input type="text" id="peDbPath" placeholder="/img/Tailand_2024/Phuket/PIC_001.jpg или /img/Tailand_2024/Phuket" readonly>
+                        <button class="btn btn-secondary" onclick="FAR.openDbPicker()" title="Выбрать файл из БД">📁 Обзор</button>
+                    </div>
+                    <small>Можно указать папку — тогда возьмётся первое изображение из неё.</small>
+                </div>
+
+                <div class="pe-field">
+                    <label>Или URL (для внешних)</label>
+                    <input type="text" id="peUrl" placeholder="https://..." autocomplete="off">
+                </div>
+
+                <h4>Направление взгляда после перехода</h4>
+                <div class="pe-coords-row">
+                    <div class="pe-field pe-field-half">
+                        <label>Target Yaw</label>
+                        <input type="number" id="peTargetYaw" step="0.01" value="0">
+                    </div>
+                    <div class="pe-field pe-field-half">
+                        <label>Target Pitch</label>
+                        <input type="number" id="peTargetPitch" step="0.01" value="0">
+                    </div>
+                </div>
+                <div class="pe-hint">Двойной клик по мини-панораме ниже — задать направление камеры.</div>
+                <hr>
+                <div class="pe-actions">
+                    <button class="btn btn-primary" onclick="FAR.peExportJson()">📤 Экспорт JSON</button>
+                    <button class="btn btn-warning" onclick="FAR.peImportJson()">📥 Импорт JSON</button>
+                    <input type="file" id="peJsonFileInput" class="file-input-hidden" accept=".json">
+                </div>
+            </div>
+
+            <!-- ПРАВАЯ КОЛОНКА: превью целевой сцены + список хотспотов -->
+            <div class="pano-editor-col pano-editor-preview">
+
+                <h4>Предпросмотр целевой сцены</h4>
+                <div id="pePreviewWrapper" class="pe-preview-wrapper">
+                    <div id="pePreviewCanvas" class="pe-preview-canvas" tabindex="0"></div>
+                    <div id="pePreviewPlaceholder" class="pe-preview-placeholder">
+                        Укажите путь к файлу и нажмите «Загрузить предпросмотр»
+                    </div>
+                </div>
+
+                <!-- Live-индикатор направления -->
+                <div class="pe-view-indicator">
+                    <div class="pe-view-row">
+                        <span class="pe-view-label">Текущее направление:</span>
+                        <span class="pe-view-value" id="peViewPitch">Pitch: 0.00°</span>
+                        <span class="pe-view-value" id="peViewYaw">Yaw: 0.00°</span>
+                        <span class="pe-view-value" id="peViewHfov">Hfov: 100°</span>
+                    </div>
+                </div>
+
+                <!-- Кнопки фиксации направления -->
+                <div class="pe-actions pe-actions-tight">
+                    <button class="btn btn-secondary" onclick="FAR.peLoadPreview()">👁 Загрузить предпросмотр</button>
+                    <button class="btn btn-primary" onclick="FAR.peCaptureDirection()" title="Записать текущее направление взгляда в Target Yaw/Pitch">🎯 Зафиксировать направление</button>
+                    <button class="btn btn-secondary" onclick="FAR.peResetDirection()" title="Сбросить Target в 0,0">↺ Сбросить направление</button>
+                    <button class="btn btn-secondary" onclick="FAR.peResetView()" title="Вернуть камеру предпросмотра в 0,0">🎥 Сбросить вид</button>
+                </div>
+                <div class="pe-view-hint">
+                    Поверните мини-панораму в нужную сторону и нажмите «🎯 Зафиксировать направление» — значения попадут в поля Target Yaw/Target Pitch.
+                </div>
+
+                <!-- Дублирующая кнопка Сохранить точку (для удобства) -->
+                <div class="pe-actions pe-actions-tight">
+                    <button class="btn btn-success" onclick="FAR.peSaveHotspot()">💾 Сохранить точку</button>
+                    <span id="pePreviewInfo" class="pe-preview-info"></span>
+                </div>
+
+                <h4>Точки перехода на текущей панораме</h4>
+                <div id="peHotspotsList" class="pe-hotspots-list">
+                    <p class="pe-empty">Нет созданных точек</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <span id="peFooterInfo">Редактор точек перехода</span>
+            <button onclick="FAR.closePanoramaEditor()">Закрыть</button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,27 @@
+<div id="jsdosViewerModal" class="modal-overlay hidden" onclick="FAR.closeJsdosViewerOutside(event)">
+    <div class="modal-content jsdos-modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="jsdosViewerTitle">🕹️ JSDOS</h3>
+            <div class="modal-header-actions">
+                <button class="viewer-nav-btn" id="jsdosPrevBtn"
+                        onclick="FAR.viewerNavigate(-1)"
+                        title="Предыдущий файл">◀</button>
+                <button class="viewer-nav-btn" id="jsdosNextBtn"
+                        onclick="FAR.viewerNavigate(+1)"
+                        title="Следующий файл">▶</button>
+                <button class="close-btn" onclick="FAR.closeJsdosViewer()">✕</button>
+            </div>
+        </div>
+        <div class="modal-body jsdos-modal-body">
+            <div id="jsdosRoot" class="jsdos-root"></div>
+            <div id="jsdosLoading" class="jsdos-loading">
+                <div class="spinner"></div>
+                <div class="jsdos-loading-text" id="jsdosLoadingText">Загрузка игры…</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <span id="jsdosViewerInfo"></span>
+            <button onclick="FAR.downloadCurrentJsdos()">📥 Скачать оригинал</button>
+        </div>
+    </div>
+</div>

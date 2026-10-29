@@ -1,0 +1,23 @@
+<div id="gcodeViewerModal" class="modal-overlay hidden" onclick="FAR.closeGcodeViewerOutside(event)">
+    <div class="modal-content gcode-modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="gcodeViewerTitle">⚙️ G-code</h3>
+            <div class="modal-header-actions">
+                <button class="viewer-nav-btn" id="gcodePrevBtn" onclick="FAR.viewerNavigate(-1)" title="Предыдущий файл">◀</button>
+                <button class="viewer-nav-btn" id="gcodeNextBtn" onclick="FAR.viewerNavigate(+1)" title="Следующий файл">▶</button>
+                <button class="close-btn" onclick="FAR.closeGcodeViewer()">✕</button>
+            </div>
+        </div>
+        <div class="modal-body gcode-modal-body">
+            <div id="gcodeRoot" class="gcode-root"></div>
+            <div id="gcodeLoading" class="gcode-loading">
+                <div class="spinner"></div>
+                <div class="gcode-loading-text" id="gcodeLoadingText">Загрузка G-code…</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <span id="gcodeViewerInfo"></span>
+            <span class="gcode-hint">Вращение: колесо · Панорама: ЛКМ · Сброс: двойной клик</span>
+        </div>
+    </div>
+</div>

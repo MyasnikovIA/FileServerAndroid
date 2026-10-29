@@ -1,0 +1,304 @@
+/* ============================================================
+   Монитор GPU (nvidia-smi)
+   ============================================================ */
+
+.gpu-modal-content {
+    max-width: 1200px;
+    width: 100%;
+    height: 90vh;
+    max-height: 90vh;
+    border-radius: 8px;
+    border: 1px solid #45475a;
+    display: flex;
+    flex-direction: column;
+}
+
+#gpuMonitorModal { z-index: 7000; }
+
+.gpu-modal-body {
+    padding: 0;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.gpu-host {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: #181825;
+    overflow: hidden;
+}
+
+/* ---- Тулбар ---- */
+.gpu-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    background: #232333;
+    border-bottom: 1px solid #313244;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.gpu-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #a6adc8;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: #1a1a24;
+    border: 1px solid #313244;
+}
+
+.gpu-status .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #6c7086;
+}
+
+.gpu-status.online .dot  { background: #a6e3a1; }
+.gpu-status.error  .dot  { background: #f38ba8; }
+.gpu-status.error        { color: #f38ba8; }
+
+.gpu-refresh-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #a6adc8;
+}
+
+.gpu-refresh-input {
+    width: 80px;
+    padding: 4px 8px;
+    background: #181825;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    color: #cdd6f4;
+    font-family: monospace;
+    font-size: 12px;
+    outline: none;
+}
+
+.gpu-refresh-input:focus {
+    border-color: #89b4fa;
+}
+
+.gpu-btn {
+    padding: 5px 12px;
+    background: #89b4fa;
+    color: #1e1e2e;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.gpu-btn:hover { background: #74c7ec; }
+
+/* ---- Тело ---- */
+.gpu-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.gpu-loading,
+.gpu-empty,
+.gpu-error {
+    padding: 40px;
+    text-align: center;
+    font-size: 13px;
+    color: #a6adc8;
+}
+
+.gpu-error { color: #f38ba8; }
+
+/* ---- Карточка GPU ---- */
+.gpu-card {
+    background: #1e1e2e;
+    border: 1px solid #45475a;
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.gpu-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #313244;
+}
+
+.gpu-index {
+    background: #89b4fa;
+    color: #1e1e2e;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: monospace;
+}
+
+.gpu-name {
+    flex: 1;
+    color: #cdd6f4;
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gpu-pstate {
+    color: #f9e2af;
+    font-family: monospace;
+    font-size: 12px;
+    background: #313244;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+/* ---- Метрики ---- */
+.gpu-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+}
+
+.gpu-metric {
+    background: #181825;
+    border: 1px solid #313244;
+    border-radius: 5px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.gpu-metric-label {
+    font-size: 11px;
+    color: #a6adc8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.gpu-metric-value {
+    font-size: 15px;
+    color: #cdd6f4;
+    font-weight: bold;
+    font-family: monospace;
+}
+
+.gpu-metric-value.warm { color: #f9e2af; }
+.gpu-metric-value.hot  { color: #f38ba8; }
+
+.gpu-metric-sub {
+    font-size: 11px;
+    color: #a6adc8;
+    font-family: monospace;
+}
+
+.gpu-bar {
+    width: 100%;
+    height: 6px;
+    background: #313244;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 2px;
+}
+
+.gpu-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease, background 0.3s ease;
+}
+
+.gpu-bar-fill.util { background: linear-gradient(90deg, #89b4fa, #74c7ec); }
+.gpu-bar-fill.mem  { background: linear-gradient(90deg, #a6e3a1, #94d98e); }
+.gpu-bar-fill.pwr  { background: linear-gradient(90deg, #f9e2af, #fab387); }
+
+/* ---- Футер карточки ---- */
+.gpu-card-footer {
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+    color: #a6adc8;
+    padding-top: 4px;
+    border-top: 1px dashed #313244;
+}
+
+.gpu-card-footer b { color: #cdd6f4; font-weight: normal; font-family: monospace; }
+
+/* ---- Процессы ---- */
+.gpu-procs {
+    background: #181825;
+    border: 1px solid #313244;
+    border-radius: 5px;
+    padding: 8px 10px;
+}
+
+.gpu-procs.empty {
+    color: #6c7086;
+    font-style: italic;
+    font-size: 12px;
+    text-align: center;
+    padding: 10px;
+}
+
+.gpu-procs-title {
+    font-size: 11px;
+    color: #a6adc8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.gpu-procs-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    font-family: monospace;
+}
+
+.gpu-procs-table th {
+    text-align: left;
+    color: #6c7086;
+    font-weight: normal;
+    padding: 3px 8px;
+    border-bottom: 1px solid #313244;
+    font-size: 11px;
+}
+
+.gpu-procs-table td {
+    padding: 3px 8px;
+    color: #cdd6f4;
+    border-bottom: 1px solid #232333;
+}
+
+.gpu-procs-table tr:last-child td { border-bottom: none; }
+
+.gpu-procs-table td[title] {
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---- WM-адаптация ---- */
+.wm-window .gpu-toolbar { padding: 6px 10px; gap: 8px; }
+.wm-window .gpu-body { padding: 8px; gap: 8px; }

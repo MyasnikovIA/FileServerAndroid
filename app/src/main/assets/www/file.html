@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+
+    <title>FAR-менеджер — FileServer</title>
+
+    <script src="lib/jszip/jszip.min.js"></script>
+
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/toolbar.css">
+    <link rel="stylesheet" href="css/panels.css">
+    <link rel="stylesheet" href="css/context-menu.css">
+    <link rel="stylesheet" href="css/status.css">
+    <link rel="stylesheet" href="css/modal.css">
+    <link rel="stylesheet" href="css/progress.css">
+    <link rel="stylesheet" href="css/loading.css">
+    <link rel="stylesheet" href="css/toast.css">
+    <link rel="stylesheet" href="css/debug.css">
+    <link rel="stylesheet" href="css/browser.css">
+    <link rel="stylesheet" href="css/console.css">
+
+    <link rel="stylesheet" href="lib/Pannellum2_5_6/pannellum.css">
+    <link rel="stylesheet" href="css/panorama-viewer.css">
+    <link rel="stylesheet" href="css/panorama-editor.css">
+    <link rel="stylesheet" href="css/db-picker.css">
+    <link rel="stylesheet" href="css/jsdos-viewer.css">
+    <link rel="stylesheet" href="lib/js-dos/js-dos.css">
+    <link rel="stylesheet" href="css/nes-viewer.css">
+    <link rel="stylesheet" href="css/emulator-viewer.css">
+    <link rel="stylesheet" href="css/gamepad-setup.css">
+    <link rel="stylesheet" href="css/pdf-viewer.css">
+    <link rel="stylesheet" href="css/mp3-viewer.css">
+    <link rel="stylesheet" href="css/video-viewer.css">
+    <link rel="stylesheet" href="css/videochat-viewer.css">
+    <link rel="stylesheet" href="css/videochat-broadcaster.css">
+    <link rel="stylesheet" href="css/gpu-monitor.css">
+    <link rel="stylesheet" href="css/ollama.css">
+    <link rel="stylesheet" href="css/lbrn2-viewer.css">
+    <link rel="stylesheet" href="css/gcode-viewer.css">
+    <link rel="stylesheet" href="css/wm.css">
+    <link rel="stylesheet" href="css/virtual-gamepad.css">
+</head>
+<body>
+
+<div class="toolbar">
+    <button onclick="FAR.uploadFile()" id="btnUpload" disabled>📤 Загрузить</button>
+    <button onclick="FAR.createFolder()" id="btnMkdir" disabled>📁 Создать папку</button>
+    <button onclick="FAR.copySelected()" class="btn-success" id="btnCopy" disabled>📋 → Копировать</button>
+    <button onclick="FAR.moveSelected()" class="btn-move" id="btnMove" disabled>✂️ → Перенести</button>
+    <button onclick="FAR.downloadSelectedUncompressed()" class="btn-download" id="btnDownload" disabled>📥 → Скачать</button>
+    <button onclick="FAR.downloadSelectedAsZip()" class="btn-zip" id="btnZip" disabled>🗜️ → Скачать ZIP</button>
+    <button onclick="FAR.deleteSelected()" class="btn-danger" id="btnDelete" disabled>🗑️ Удалить</button>
+    <button onclick="FAR.refreshFiles()" class="btn-warning" id="btnRefresh" disabled>🔄 Обновить</button>
+    <button onclick="FAR.showDebug()" id="btnDebug" title="Показать структуру" disabled>🔍 Debug</button>
+    <button onclick="FAR.openGamepadSetup()" id="btnGamepad" title="Настроить джойстик">🎮 Джойстик</button>
+    <button onclick="FAR.openGpuMonitor()" id="btnGpu" title="Мониторинг видеокарт (nvidia-smi)">🎮 GPU</button>
+    <button onclick="FAR.openOllama()" id="btnOllama" title="Ollama Chat (локальная LLM)">🦙 Ollama</button>
+    <button onclick="FAR.openConsole()" id="btnConsole" title="Терминал (только для разрешённых пользователей)" style="display:none;">🖥️ Консоль</button>
+    <button onclick="FAR.openVideoChat()" id="btnVideoChat" title="Смотреть трансляцию" style="display:none;">📺 Трансляция</button>
+    <button onclick="FAR.openBroadcaster()" id="btnBroadcast" title="Начать трансляцию с камеры" style="display:none;">🎥 Вещать</button>
+    <button onclick="FAR.onAuthButton()" class="btn-auth" id="btnAuth" title="Войти / Выйти">🔐 LogIn</button>
+    <button onclick="FAR.WM.toggle()" id="btnWM" title="Оконный режим">🖥 Рабочий стол</button>
+    <button onclick="FAR.gamepadModeCycle()"
+            oncontextmenu="event.preventDefault(); FAR.openGamepadSetup();"
+            class="gp-mode-indicator gp-mode-files"
+            id="gpModeIndicator"
+            title="ЛКМ — переключить режим, ПКМ — настройка">🎮 Файлы</button>
+    <span style="color:#a6adc8;font-size:12px;margin-left:auto;" id="statusText">Инициализация…</span>
+</div>
+
+<div class="panels">
+    <div class="panel active" id="panelLeft" onclick="FAR.setActivePanel('left')">
+        <div class="panel-header">
+            <span class="path" id="pathLeft">/</span>
+            <div class="nav-buttons">
+                <button onclick="event.stopPropagation(); FAR.openConnModal(false, 'left')" title="Сменить сервер для левой панели">🗄️</button>
+                <button onclick="event.stopPropagation(); FAR.navigatePanel('left', '..')">⬆</button>
+                <button onclick="event.stopPropagation(); FAR.navigatePanel('left', '/')">🏠</button>
+            </div>
+        </div>
+        <div class="file-list" id="listLeft"></div>
+        <div class="drop-hint" id="dropHintLeft">
+            <div class="drop-icon">📥</div>
+            <div>Отпустите, чтобы загрузить</div>
+            <div class="drop-path" id="dropPathLeft">/</div>
+        </div>
+    </div>
+    <div class="panel" id="panelRight" onclick="FAR.setActivePanel('right')">
+        <div class="panel-header">
+            <span class="path" id="pathRight">/</span>
+            <div class="nav-buttons">
+                <button onclick="event.stopPropagation(); FAR.openConnModal(false, 'right')" title="Сменить сервер для правой панели">🗄️</button>
+                <button onclick="event.stopPropagation(); FAR.navigatePanel('right', '..')">⬆</button>
+                <button onclick="event.stopPropagation(); FAR.navigatePanel('right', '/')">🏠</button>
+            </div>
+        </div>
+        <div class="file-list" id="listRight"></div>
+        <div class="drop-hint" id="dropHintRight">
+            <div class="drop-icon">📥</div>
+            <div>Отпустите, чтобы загрузить</div>
+            <div class="drop-path" id="dropPathRight">/</div>
+        </div>
+    </div>
+</div>
+
+<div class="status-bar">
+    <span id="statusLeft">Левая: 0</span>
+    <span id="statusRight">Правая: 0</span>
+    <span class="total-size" id="totalSize">💾 Всего: 0 B • файлов: 0 • папок: 0</span>
+    <span class="sel-info" id="selInfo"></span>
+</div>
+
+<div id="modalRoot"></div>
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Pannellum -->
+<script src="lib/Pannellum2_5_6/pannellum.js"></script>
+<script src="lib/Pannellum2_5_6/libpannellum.js"></script>
+
+<!-- Ядро клиента -->
+<script src="js/01-config.js"></script>
+<script src="js/02-state.js"></script>
+<script src="js/03-utils.js"></script>
+<script src="js/04a-fs-client.js"></script>
+<script src="js/04b-auth-token.js"></script>
+<script src="js/05-connection.js"></script>
+
+<script src="js/06-files.js"></script>
+<script src="js/07-progress.js"></script>
+<script src="js/08-panels.js"></script>
+<script src="js/09-auth.js"></script>
+<script src="js/10-connection-modal.js"></script>
+<script src="js/11-viewer.js"></script>
+<script src="js/12-debug.js"></script>
+<script src="js/13-upload.js"></script>
+<script src="js/14-mkdir.js"></script>
+<script src="js/15-copy.js"></script>
+<script src="js/16-move.js"></script>
+<script src="js/17-delete.js"></script>
+<script src="js/18-download.js"></script>
+<script src="js/19-zip.js"></script>
+<script src="js/21-dragdrop.js"></script>
+<script src="js/22-keyboard.js"></script>
+<script src="js/34-context-menu.js"></script>
+<script src="js/35a-multi-db-core.js"></script>
+<script src="js/35b-multi-db-load.js"></script>
+<script src="js/35c-multi-db-transfer.js"></script>
+<script src="js/35d-multi-db-ui.js"></script>
+<script src="js/23-main.js"></script>
+<script src="js/24-panorama-viewer.js"></script>
+<script src="js/25-panorama-db-resolver.js"></script>
+<script src="js/26-panorama-editor.js"></script>
+<script src="js/27-db-picker.js"></script>
+
+<script src="lib/js-dos/js-dos.js"></script>
+<script src="js/28-jsdos-viewer.js"></script>
+<script src="js/29-nes-viewer.js"></script>
+<script src="js/30-emulator-viewer.js"></script>
+<script src="js/31-gamepad.js"></script>
+<script src="js/32-gamepad-setup.js"></script>
+<script src="lib/PDFObject/pdfobject.min.js"></script>
+<script src="js/33-pdf-viewer.js"></script>
+<script src="js/36-mp3-viewer.js"></script>
+<script src="js/37-video-viewer.js"></script>
+
+<script src="js/39-browser-bookmarks.js"></script>
+<script src="js/38-browser-viewer.js"></script>
+
+<script src="js/40-wm-core.js"></script>
+<script src="js/41-wm-taskbar.js"></script>
+<script src="js/42-wm-startmenu.js"></script>
+<script src="js/43-wm-desktop.js"></script>
+<script src="js/44-wm-apps.js"></script>
+<script src="js/45-wm-dragdrop.js"></script>
+<script src="js/46-wm-explorer.js"></script>
+<script src="js/47-wm-viewers.js"></script>
+<script src="js/48-wm-viewers-emu.js"></script>
+<script src="js/49-wm-dialogs.js"></script>
+<script src="js/50-wm-misc.js"></script>
+<script src="js/46-wm-mp3-viewer.js"></script>
+<script src="js/47-fullscreen.js"></script>
+<script src="js/48-wm-wallpaper.js"></script>
+<script src="js/49-wm-wallpaper-360.js"></script>
+<script src="js/51-console.js"></script>
+<script src="js/52-videochat-viewer.js"></script>
+<script src="js/53-videochat-broadcaster.js"></script>
+<script src="js/54-wm-panorama-editor.js"></script>
+<script src="js/55-wm-text-editor.js"></script>
+<script src="js/56-gpu-monitor.js"></script>
+<script src="js/57-ollama.js"></script>
+<script src="js/58-lbrn2-viewer.js"></script>
+<script src="js/59-gcode-viewer.js"></script>
+<script src="js/60-virtual-gamepad.js"></script>
+<script src="js/61-open-in-tab.js"></script>
+<script src="js/62-touch-adapter.js"></script>
+<script src="js/63-android-apps.js"></script>
+</body>
+</html>

@@ -1,0 +1,438 @@
+/* ============================================================
+   MP3-плеер в стиле Winamp
+   ============================================================ */
+
+.mp3-modal-content {
+    background: #1a1a1a;
+    color: #dcdcdc;
+    width: 95%;
+    max-width: 780px;
+    padding: 0;
+    border: 1px solid #333;
+    border-radius: 0;
+    font-family: "Segoe UI", Tahoma, sans-serif;
+}
+
+.mp3-modal-content .modal-header {
+    background: linear-gradient(180deg, #2a2a3a 0%, #1a1a28 100%);
+    border-bottom: 1px solid #000;
+    padding: 6px 12px;
+    color: #c0c0d0;
+}
+
+.mp3-modal-content .modal-header h3 {
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    color: #c0c0d0;
+    margin: 0;
+}
+
+.mp3-modal-body {
+    position: relative;
+    background: #0a0a0a;
+    padding: 8px;
+    overflow: hidden;
+}
+
+/* ==== Общий контейнер плеера ==== */
+.mp3-winamp {
+    display: flex;
+    gap: 4px;
+    height: 400px;
+}
+
+/* ==== Основное окно ==== */
+.winamp-main {
+    flex: 0 0 0px;
+    background: #1a1a1a;
+    border: 2px solid #000;
+    border-top-color: #4a4a4a;
+    border-left-color: #4a4a4a;
+    border-right-color: #000;
+    border-bottom-color: #000;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* --- Титульник с полосками --- */
+.winamp-titlebar {
+    display: flex;
+    align-items: center;
+    background: linear-gradient(180deg, #3a3a5a 0%, #1a1a3a 100%);
+    border: 1px solid #000;
+    height: 18px;
+    padding: 0 4px;
+    position: relative;
+    overflow: hidden;
+}
+
+.winamp-titlebar-stripes {
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+        90deg,
+        transparent 0,
+        transparent 2px,
+        rgba(255,255,255,0.04) 2px,
+        rgba(255,255,255,0.04) 4px
+    );
+    pointer-events: none;
+}
+
+.winamp-title {
+    font-size: 10px;
+    font-weight: bold;
+    color: #a0a0d0;
+    letter-spacing: 2px;
+    z-index: 1;
+}
+
+.winamp-titlebar-spacer { flex: 1; }
+
+.winamp-btn-close {
+    background: #2a2a3a;
+    color: #c0c0d0;
+    border: 1px solid #000;
+    width: 14px; height: 12px;
+    font-size: 8px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    z-index: 1;
+}
+.winamp-btn-close:hover { background: #4a2a2a; color: #ff8080; }
+
+/* --- Дисплей --- */
+.winamp-display {
+    background: #000;
+    border: 1px solid #000;
+    border-top-color: #333;
+    border-left-color: #333;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    position: relative;
+}
+
+.winamp-display-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    font-family: "Courier New", monospace;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.winamp-time {
+    color: #00ff00;
+    text-shadow: 0 0 4px #00ff00;
+    letter-spacing: 1px;
+    min-width: 52px;
+}
+
+.winamp-kbps, .winamp-khz, .winamp-ch {
+    color: #00cc00;
+    font-size: 10px;
+    text-shadow: 0 0 3px #00cc00;
+}
+
+/* --- Визуализатор --- */
+.winamp-visualizer {
+    height: 40px;
+    background: #000;
+    border: 1px solid #222;
+    display: flex;
+    align-items: flex-end;
+    gap: 1px;
+    padding: 2px;
+    overflow: hidden;
+}
+
+.winamp-visualizer .bar {
+    flex: 1;
+    background: linear-gradient(180deg, #00ff00 0%, #00aa00 50%, #ff0000 100%);
+    height: 0%;
+    transition: height 0.05s linear;
+    min-width: 2px;
+}
+
+/* --- Бегущая строка --- */
+.winamp-marquee {
+    font-family: "Courier New", monospace;
+    font-size: 10px;
+    color: #00aa00;
+    background: #000;
+    border: 1px solid #222;
+    padding: 2px 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    height: 14px;
+    line-height: 10px;
+}
+
+/* --- Полоса прокрутки --- */
+.winamp-seek {
+    position: relative;
+    height: 10px;
+    background: #000;
+    border: 1px solid #333;
+    cursor: pointer;
+    margin: 2px 0;
+}
+
+.winamp-seek-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 0%;
+    background: linear-gradient(180deg, #00ff00 0%, #00aa00 100%);
+}
+
+.winamp-seek-thumb {
+    position: absolute;
+    top: -2px;
+    width: 8px; height: 12px;
+    background: linear-gradient(180deg, #d0d0d0 0%, #707070 100%);
+    border: 1px solid #000;
+    pointer-events: none;
+    transform: translateX(-4px);
+    left: 0%;
+}
+
+/* --- Кнопки --- */
+.winamp-controls {
+    display: flex;
+    justify-content: space-between;
+    gap: 3px;
+    padding: 2px 0;
+}
+
+.winamp-btn {
+    flex: 1;
+    height: 24px;
+    background: linear-gradient(180deg, #4a4a5a 0%, #2a2a3a 100%);
+    color: #d0d0d0;
+    border: 1px solid #000;
+    border-top-color: #6a6a7a;
+    border-left-color: #6a6a7a;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0;
+    font-family: inherit;
+}
+
+.winamp-btn:hover { background: linear-gradient(180deg, #5a5a6a 0%, #3a3a4a 100%); }
+.winamp-btn:active {
+    background: linear-gradient(180deg, #2a2a3a 0%, #4a4a5a 100%);
+    border-top-color: #000;
+    border-left-color: #000;
+    border-bottom-color: #6a6a7a;
+    border-right-color: #6a6a7a;
+}
+
+.winamp-btn-play {
+    background: linear-gradient(180deg, #3a6a3a 0%, #1a4a1a 100%);
+    color: #80ff80;
+}
+
+.winamp-btn-play:hover { background: linear-gradient(180deg, #4a7a4a 0%, #2a5a2a 100%); }
+
+/* --- Слайдеры --- */
+.winamp-sliders {
+    display: flex;
+    gap: 6px;
+    padding: 2px 0;
+}
+
+.winamp-slider-block {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.winamp-slider-block label {
+    font-size: 9px;
+    color: #80a0c0;
+    font-weight: bold;
+    letter-spacing: 1px;
+    min-width: 24px;
+}
+
+.winamp-slider-block input[type="range"] {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 10px;
+    background: #000;
+    border: 1px solid #333;
+    outline: none;
+}
+
+.winamp-slider-block input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 8px; height: 12px;
+    background: linear-gradient(180deg, #d0d0d0 0%, #707070 100%);
+    border: 1px solid #000;
+    cursor: pointer;
+}
+
+.winamp-slider-block input[type="range"]::-moz-range-thumb {
+    width: 8px; height: 12px;
+    background: linear-gradient(180deg, #d0d0d0 0%, #707070 100%);
+    border: 1px solid #000;
+    cursor: pointer;
+}
+
+/* ==== Плейлист ==== */
+.winamp-playlist {
+    flex: 1 1 auto;
+    min-height: 180px;
+    background: #1a1a1a;
+    border: 2px solid #000;
+    border-top-color: #4a4a4a;
+    border-left-color: #4a4a4a;
+    border-right-color: #000;
+    border-bottom-color: #000;
+    display: flex;
+    flex-direction: column;
+}
+
+.winamp-pl-titlebar {
+    background: linear-gradient(180deg, #3a3a5a 0%, #1a1a3a 100%);
+    border-bottom: 1px solid #000;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: bold;
+    color: #a0a0d0;
+    letter-spacing: 2px;
+}
+
+.winamp-pl-list {
+    flex: 1;
+    overflow-y: auto;
+    background: #000;
+    font-family: "Courier New", monospace;
+    font-size: 11px;
+    color: #00cc00;
+    padding: 2px 0;
+}
+
+.winamp-pl-list::-webkit-scrollbar { width: 10px; }
+.winamp-pl-list::-webkit-scrollbar-track { background: #1a1a1a; }
+.winamp-pl-list::-webkit-scrollbar-thumb {
+    background: #4a4a5a;
+    border: 1px solid #000;
+}
+.winamp-pl-list::-webkit-scrollbar-thumb:hover { background: #6a6a7a; }
+
+.winamp-pl-item {
+    display: flex;
+    padding: 1px 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 14px;
+}
+
+.winamp-pl-item:hover { background: #0a1a0a; }
+.winamp-pl-item.active { background: #003300; color: #00ff00; }
+
+.winamp-pl-item .pl-num {
+    color: #808080;
+    min-width: 26px;
+    text-align: right;
+    padding-right: 8px;
+}
+
+.winamp-pl-item .pl-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.winamp-pl-item .pl-dur {
+    color: #808080;
+    padding-left: 8px;
+}
+
+.winamp-pl-footer {
+    background: #1a1a1a;
+    border-top: 1px solid #333;
+    padding: 2px 6px;
+    font-size: 10px;
+    color: #8080a0;
+    font-family: "Courier New", monospace;
+}
+
+/* ==== Индикатор загрузки ==== */
+.mp3-loading {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    z-index: 10;
+}
+
+.mp3-loading.hidden { display: none; }
+
+.mp3-loading .loading-text {
+    color: #00cc00;
+    font-family: "Courier New", monospace;
+    font-size: 12px;
+}
+
+/* ==== Адаптив ==== */
+@media (max-width: 640px) {
+    .mp3-winamp { height: auto; }
+    .winamp-main { flex: none; }
+    .winamp-playlist { min-height: 240px; }
+}
+
+
+/* --- Режимы воспроизведения --- */
+.winamp-modes {
+    display: flex;
+    gap: 3px;
+    padding: 0;
+}
+
+.winamp-mode-btn {
+    flex: 1;
+    height: 18px;
+    background: linear-gradient(180deg, #3a3a4a 0%, #1a1a2a 100%);
+    color: #6a6a8a;
+    border: 1px solid #000;
+    border-top-color: #5a5a6a;
+    border-left-color: #5a5a6a;
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    cursor: pointer;
+    padding: 0;
+    font-family: inherit;
+}
+
+.winamp-mode-btn:hover { background: linear-gradient(180deg, #4a4a5a 0%, #2a2a3a 100%); }
+
+.winamp-mode-btn.active {
+    background: linear-gradient(180deg, #4a8a4a 0%, #1a5a1a 100%);
+    color: #a0ffa0;
+    text-shadow: 0 0 4px #80ff80;
+}
+.mp3-winamp {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    height: 480px;
+}

@@ -1,0 +1,107 @@
+/* ============ Модалка просмотра JSDOS ============ */
+.jsdos-modal-content {
+    max-width: 100vw;
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    border: none;
+    display: flex;
+    flex-direction: column;
+}
+
+.jsdos-modal-body {
+    position: relative;
+    padding: 0;
+    background: #000;
+    overflow: hidden;
+    flex: 1;
+    min-height: 400px;
+    display: flex;
+    flex-direction: column;
+}
+
+/*
+ * КОРНЕВОЙ контейнер js-dos.
+ *
+ * ВАЖНО: никогда не переопределяйте position/display/flex-direction
+ * на ПРЯМЫХ потомках .jsdos-root. js-dos 6.x создаёт там свой layout:
+ *   • flex-grow-0  — панель приложения (sidebar + action bar);
+ *   • flex-col + flex-grow — основной контейнер (canvas + keyboard);
+ *   • absolute     — оверлей загрузки.
+ * Любые !important-переопределения ломают этот layout, и canvas
+ * остаётся без размеров, а игра — в состоянии «не запущено».
+ */
+.jsdos-root {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    min-height: 400px;
+    position: relative;
+    background: #000;
+    overflow: hidden;
+}
+
+/*
+ * Пикселизация canvas. js-dos уже применяет .emulator-canvas
+ * из lib/js-dos/js-dos.css, но продублируем на случай, если
+ * пользовательский CSS загрузился раньше.
+ */
+.jsdos-root canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    outline: none;
+}
+
+/* Оверлей загрузки — наш, показываем ДО тех пор, пока
+   js-dos не закончит run() и не покажет свой «Click to start». */
+.jsdos-loading {
+    position: absolute;
+    inset: 0;
+    background: rgba(30, 30, 46, 0.92);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    z-index: 10;
+}
+
+.jsdos-loading.hidden {
+    display: none;
+}
+
+.jsdos-loading .spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid #313244;
+    border-top-color: #89b4fa;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.jsdos-loading .jsdos-loading-text {
+    color: #a6adc8;
+    font-size: 14px;
+}
+
+/* Футер */
+#jsdosViewerModal .modal-footer {
+    padding: 8px 16px;
+    background: #181825;
+}
+
+#jsdosViewerModal .modal-footer button {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 12px;
+    background: #89b4fa;
+    color: #1e1e2e;
+}
+
+#jsdosViewerModal .modal-footer button:hover {
+    background: #74c7ec;
+}

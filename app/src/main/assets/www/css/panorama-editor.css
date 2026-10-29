@@ -1,0 +1,333 @@
+/* ============ Модалка редактора хотспотов ============ */
+.pano-editor-content {
+    max-width: 1500px;
+    width: 100%;
+    height: 92vh;
+    max-height: 92vh;
+}
+
+.pano-editor-body {
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    overflow: hidden;
+    flex: 1;
+    min-height: 0;
+}
+
+.pano-editor-col {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.pano-editor-form {
+    flex: 0 0 420px;
+    border-right: 1px solid #45475a;
+    padding-right: 16px;
+}
+
+.pano-editor-preview {
+    flex: 1;
+    min-width: 0;
+}
+
+.pano-editor-col h4 {
+    margin: 12px 0 6px;
+    color: #89b4fa;
+    font-size: 13px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.pano-editor-col h4:first-child {
+    margin-top: 0;
+}
+
+.pe-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.pe-field label {
+    font-size: 12px;
+    color: #a6adc8;
+}
+
+.pe-field input,
+.pe-field select {
+    padding: 6px 10px;
+    background: #313244;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    color: #cdd6f4;
+    font-size: 12px;
+    font-family: inherit;
+}
+
+.pe-field input:focus,
+.pe-field select:focus {
+    outline: none;
+    border-color: #89b4fa;
+}
+
+.pe-field small {
+    color: #6c7086;
+    font-size: 11px;
+}
+
+.pe-field-half {
+    flex: 1;
+    min-width: 0;
+}
+
+.pe-coords-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.pe-hint {
+    font-size: 11px;
+    color: #6c7086;
+    margin-bottom: 12px;
+    font-style: italic;
+}
+
+.pe-db-browse {
+    display: flex;
+    gap: 6px;
+}
+
+.pe-db-browse input {
+    flex: 1;
+}
+
+.pe-db-browse button {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.pe-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.pe-actions button {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.pe-actions .btn-success { background: #a6e3a1; color: #1e1e2e; }
+.pe-actions .btn-success:hover { background: #94d98e; }
+.pe-actions .btn-primary { background: #89b4fa; color: #1e1e2e; }
+.pe-actions .btn-primary:hover { background: #74c7ec; }
+.pe-actions .btn-secondary { background: #585b70; color: #cdd6f4; }
+.pe-actions .btn-secondary:hover { background: #6c7086; }
+.pe-actions .btn-warning { background: #f9e2af; color: #1e1e2e; }
+.pe-actions .btn-warning:hover { background: #f5d38a; }
+
+.pe-preview-wrapper {
+    position: relative;
+    width: 100%;
+    height: 340px;
+    background: #181825;
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.pe-preview-canvas {
+    width: 100%;
+    height: 100%;
+}
+
+.pe-preview-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c7086;
+    font-size: 13px;
+    text-align: center;
+    padding: 20px;
+    pointer-events: none;
+}
+
+.pe-preview-wrapper.loaded .pe-preview-placeholder {
+    display: none;
+}
+
+.pe-preview-info {
+    font-size: 11px;
+    color: #a6adc8;
+    align-self: center;
+    margin-left: auto;
+}
+
+.pe-hotspots-list {
+    flex: 1;
+    overflow-y: auto;
+    background: #181825;
+    border-radius: 6px;
+    padding: 8px;
+    min-height: 100px;
+}
+
+.pe-hotspots-list .pe-empty {
+    color: #6c7086;
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+    font-size: 12px;
+}
+
+.pe-hotspot-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 8px 10px;
+    background: #313244;
+    border: 1px solid #45475a;
+    border-radius: 5px;
+    margin-bottom: 6px;
+    font-size: 12px;
+}
+
+.pe-hotspot-item .pe-hs-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.pe-hotspot-item .pe-hs-name {
+    color: #cdd6f4;
+    font-weight: bold;
+    margin-bottom: 3px;
+}
+
+.pe-hotspot-item .pe-hs-detail {
+    color: #a6adc8;
+    font-size: 11px;
+    font-family: monospace;
+    word-break: break-all;
+}
+
+.pe-hotspot-item .pe-hs-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.pe-hotspot-item .pe-hs-actions button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.pe-hotspot-item .pe-hs-actions button.edit { color: #f9e2af; }
+.pe-hotspot-item .pe-hs-actions button.edit:hover { background: #45475a; }
+.pe-hotspot-item .pe-hs-actions button.delete { color: #f38ba8; }
+.pe-hotspot-item .pe-hs-actions button.delete:hover { background: #45475a; }
+
+/* Кнопка "Редактор" в модалке просмотра панорамы */
+.pano-modal-footer-btn {
+    background: #f9e2af;
+    color: #1e1e2e;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 12px;
+    margin-right: 8px;
+}
+
+.pano-modal-footer-btn:hover {
+    background: #f5d38a;
+}
+
+/* ============ Live-индикатор направления ============ */
+.pe-view-indicator {
+    background: #181825;
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+}
+
+.pe-view-row {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    flex-wrap: wrap;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.pe-view-label {
+    color: #a6adc8;
+    font-weight: bold;
+}
+
+.pe-view-value {
+    color: #a6e3a1;
+    background: #313244;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid #45475a;
+    min-width: 90px;
+    text-align: center;
+}
+
+.pe-actions-tight {
+    margin-bottom: 8px;
+}
+
+.pe-view-hint {
+    font-size: 11px;
+    color: #6c7086;
+    font-style: italic;
+    margin-bottom: 12px;
+    line-height: 1.5;
+}
+
+/* Кнопка "Зафиксировать направление" чуть крупнее */
+.pe-actions .btn-primary {
+    font-size: 12px;
+}
+
+/* Подсветка элемента списка, который редактируется */
+.pe-hotspot-item.editing {
+    border-color: #f9e2af;
+    background: #3a3a2a;
+}
+
+.pe-hotspot-item .pe-hs-target {
+    color: #a6e3a1;
+    font-family: monospace;
+}
+
+/* Кнопка "Загрузить в предпросмотр" в списке */
+.pe-hotspot-item .pe-hs-actions button.load {
+    color: #89b4fa;
+}
+.pe-hotspot-item .pe-hs-actions button.load:hover {
+    background: #45475a;
+}

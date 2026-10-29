@@ -1,0 +1,11 @@
+
+.debug-info {
+    position: fixed; top: 60px; left: 10px;
+    background: #313244; border: 1px solid #45475a;
+    border-radius: 6px; padding: 10px;
+    font-size: 11px; font-family: monospace;
+    color: #a6adc8; max-width: 700px; max-height: 500px;
+    overflow: auto; display: none; z-index: 100;
+    white-space: pre-wrap;
+}
+.debug-info.active { display: block; }

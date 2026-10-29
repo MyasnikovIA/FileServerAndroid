@@ -1,0 +1,17 @@
+<div id="videoChatViewerModal" class="modal-overlay hidden" onclick="FAR.closeVideoChatViewerOutside(event)">
+    <div class="modal-content videochat-modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="videoChatViewerTitle">📺 Трансляция</h3>
+            <div class="modal-header-actions">
+                <button class="close-btn" onclick="FAR.closeVideoChatViewer()">✕</button>
+            </div>
+        </div>
+        <div class="modal-body videochat-modal-body">
+            <div id="videoChatViewerHost" class="videochat-host"></div>
+        </div>
+        <div class="modal-footer videochat-modal-footer">
+            <span id="videoChatViewerInfo"></span>
+            <button onclick="FAR.videoChatToggleFullscreen()">⛶ Полный экран</button>
+        </div>
+    </div>
+</div>

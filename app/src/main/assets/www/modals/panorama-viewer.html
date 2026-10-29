@@ -1,0 +1,31 @@
+<div id="panoramaViewerModal" class="modal-overlay hidden" onclick="FAR.closePanoramaViewerOutside(event)">
+    <div class="modal-content pano-modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="panoramaViewerTitle">🌐 Просмотр панорамы</h3>
+            <div class="modal-header-actions">
+                <button class="viewer-nav-btn" id="panoPrevBtn"
+                        onclick="FAR.viewerNavigate(-1)"
+                        title="Предыдущий файл">◀</button>
+                <button class="viewer-nav-btn" id="panoNextBtn"
+                        onclick="FAR.viewerNavigate(+1)"
+                        title="Следующий файл">▶</button>
+                <button class="close-btn" onclick="FAR.closePanoramaViewer()">✕</button>
+            </div>
+        </div>
+        <div class="modal-body pano-modal-body">
+            <div id="panoramaCanvas" class="panorama-canvas"></div>
+            <div id="panoramaLoading" class="panorama-loading">
+                <div class="spinner"></div>
+                <div class="loading-text" id="panoramaLoadingText">Загрузка панорамы…</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <span id="panoramaViewerInfo"></span>
+            <span class="pano-dblclick-hint" title="Двойной клик по панораме добавляет точку перехода">
+                💡 Двойной клик по панораме — добавить точку перехода
+            </span>
+            <button class="pano-modal-footer-btn" onclick="FAR.openPanoramaEditor()">✏️ Редактор точек</button>
+            <button onclick="FAR.downloadCurrentPanorama()">📥 Скачать оригинал</button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,230 @@
+/* ============================================================
+   Виртуальный джойстик для мобильных устройств (эмуляторы)
+   ============================================================ */
+
+.vg-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    touch-action: none; /* Отключаем скролл и зум при касании */
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Кнопка вызова джойстика */
+.vg-toggle-btn {
+    position: absolute;
+    top: 10px;
+    right: 70px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    font-size: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 10001;
+    transition: background 0.2s, opacity 0.2s;
+}
+.vg-toggle-btn:hover { background: rgba(0, 0, 0, 0.7); }
+.vg-toggle-btn.active { background: rgba(137, 180, 250, 0.8); border-color: #fff; }
+
+/* Скрываем кнопку на устройствах с мышью (ПК) */
+@media (hover: hover) and (pointer: fine) {
+    .vg-toggle-btn {
+        display: none !important;
+    }
+}
+
+.vg-pad-container {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+}
+.vg-pad-container.hidden {
+    opacity: 0;
+    pointer-events: none !important;
+}
+
+/* ============================================================
+   D-Pad (Крестовина)
+   ============================================================ */
+.vg-dpad {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    width: 150px;
+    height: 150px;
+    pointer-events: auto;
+}
+
+.vg-dpad-btn {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 24px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    transition: background 0.1s;
+}
+.vg-dpad-btn.active {
+    background: rgba(137, 180, 250, 0.6);
+    border-color: #fff;
+    color: #fff;
+}
+.vg-dpad-up    { top: 0;    left: 50px; border-radius: 10px 10px 4px 4px; }
+.vg-dpad-down  { bottom: 0; left: 50px; border-radius: 4px 4px 10px 10px; }
+.vg-dpad-left  { top: 50px; left: 0;    border-radius: 10px 4px 4px 10px; }
+.vg-dpad-right { top: 50px; right: 0;   border-radius: 4px 10px 10px 4px; }
+.vg-dpad-center {
+    position: absolute;
+    top: 50px; left: 50px;
+    width: 50px; height: 50px;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+/* Новое расположение L и R в углах крестовины */
+.vg-dpad-l { top: 0; left: 0; }
+.vg-dpad-r { top: 0; right: 0; }
+
+/* ============================================================
+   Action Кнопки (A, B, X, Y, C, Z)
+   ============================================================ */
+.vg-actions {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 180px;
+    height: 150px;
+    pointer-events: auto;
+}
+
+.vg-action-btn {
+    position: absolute;
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    transition: background 0.1s;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+.vg-action-btn.active {
+    background: rgba(166, 227, 161, 0.6);
+    border-color: #fff;
+    color: #fff;
+}
+
+/* Turbo-кнопки (для NES) */
+.vg-turbo-btn {
+    position: absolute;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px dashed rgba(255, 255, 255, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    transition: background 0.1s;
+}
+.vg-turbo-btn.active {
+    background: rgba(166, 227, 161, 0.6);
+    border-color: #fff;
+    color: #fff;
+}
+
+/* --- Раскладка для NES (2 кнопки + турбо) --- */
+.vg-layout-nes .vg-btn-b { bottom: 20px; left: 0px; }
+.vg-layout-nes .vg-btn-a { bottom: 20px; left: 70px; }
+.vg-layout-nes .vg-btn-tb { bottom: 80px; left: 0px; }
+.vg-layout-nes .vg-btn-ta { bottom: 80px; left: 70px; }
+
+/* --- Раскладка для SNES/PSX (4 кнопки ромбом) --- */
+.vg-layout-snes .vg-btn-y { top: 10px; left: 20px; }
+.vg-layout-snes .vg-btn-x { top: 10px; right: 20px; }
+.vg-layout-snes .vg-btn-b { bottom: 10px; left: 20px; }
+.vg-layout-snes .vg-btn-a { bottom: 10px; right: 20px; background: rgba(249, 226, 175, 0.15); }
+.vg-layout-snes .vg-btn-a.active { background: rgba(249, 226, 175, 0.7); }
+
+/* --- Раскладка для Sega MD (6 кнопок) --- */
+.vg-layout-sega .vg-btn-x { top: 10px; left: 0px; }
+.vg-layout-sega .vg-btn-y { top: 10px; left: 60px; }
+.vg-layout-sega .vg-btn-z { top: 10px; left: 120px; }
+.vg-layout-sega .vg-btn-a { bottom: 10px; left: 0px; }
+.vg-layout-sega .vg-btn-b { bottom: 10px; left: 60px; }
+.vg-layout-sega .vg-btn-c { bottom: 10px; left: 120px; }
+
+/* ============================================================
+   System Кнопки (Start, Select)
+   ============================================================ */
+.vg-system {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 20px;
+    pointer-events: auto;
+}
+
+.vg-sys-btn {
+    padding: 8px 16px;
+    border-radius: 20px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    transition: background 0.1s;
+}
+.vg-sys-btn.active {
+    background: rgba(137, 180, 250, 0.7);
+    border-color: #fff;
+    color: #fff;
+}
+
+/* Адаптив для маленьких экранов */
+@media (max-width: 480px) {
+    .vg-dpad { bottom: 10px; left: 10px; transform: scale(0.85); transform-origin: bottom left; }
+    .vg-actions { bottom: 10px; right: 10px; transform: scale(0.85); transform-origin: bottom right; }
+    .vg-system { bottom: 80px; transform: translateX(-50%) scale(0.9); }
+}

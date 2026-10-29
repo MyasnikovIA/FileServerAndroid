@@ -1,0 +1,8 @@
+.status-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 10px; padding: 6px 10px; background: #313244;
+    border-radius: 6px; margin-top: 8px; font-size: 12px;
+    color: #a6adc8; flex-shrink: 0; flex-wrap: wrap;
+}
+.status-bar .sel-info { color: #f9e2af; }
+.status-bar .total-size { color: #89b4fa; font-weight: bold; }

@@ -1,0 +1,178 @@
+/* ============================================================
+   Модуль 59: G-code Viewer
+   ============================================================ */
+
+.gcode-modal-content {
+    max-width: 100vw;
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    border: none;
+    display: flex;
+    flex-direction: column;
+}
+
+#gcodeViewerModal { z-index: 7000; }
+
+.gcode-modal-body {
+    position: relative;
+    padding: 0;
+    background: #1e1e2e;
+    overflow: hidden;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.gcode-root {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: row;
+    position: relative;
+}
+
+/* --- Панель слоёв --- */
+.gcode-sidebar {
+    width: 260px;
+    min-width: 220px;
+    background: #2a2a2a;
+    border-right: 1px solid #3a3a3a;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.gcode-sidebar .section {
+    padding: 12px 14px;
+    border-bottom: 1px solid #3a3a3a;
+}
+
+.gcode-sidebar h3 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: #8a8a8a;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.gcode-stat-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: #e0e0e0;
+    margin-bottom: 4px;
+}
+.gcode-stat-label { color: #8a8a8a; }
+
+/* --- Вьюпорт --- */
+.gcode-viewport {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #1e1e1e;
+    background-image:
+            linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+            linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+    background-size: 20px 20px;
+    cursor: grab;
+}
+
+.gcode-viewport.dragging { cursor: grabbing; }
+
+.gcode-viewport svg {
+    background: #fff;
+    box-shadow: 0 4px 24px rgba(0,0,0,.55);
+    display: block;
+    width: 100%;
+    height: 100%;
+    transform-origin: 0 0;
+}
+
+/* --- Управление зумом --- */
+.gcode-zoom-controls {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    display: flex;
+    gap: 4px;
+    z-index: 10;
+}
+
+.gcode-zoom-controls button {
+    width: 34px;
+    height: 34px;
+    border-radius: 6px;
+    border: 1px solid #45475a;
+    background: #2a2a2a;
+    color: #cdd6f4;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: .15s;
+}
+
+.gcode-zoom-controls button:hover {
+    background: #3a3a3a;
+    border-color: #555;
+}
+
+.gcode-zoom-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 56px;
+    height: 34px;
+    background: #2a2a2a;
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #8a8a8a;
+    font-family: monospace;
+}
+
+/* --- Оверлей загрузки --- */
+.gcode-loading {
+    position: absolute;
+    inset: 0;
+    background: rgba(30, 30, 46, 0.92);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    z-index: 10;
+}
+.gcode-loading.hidden { display: none; }
+.gcode-loading .spinner {
+    width: 50px; height: 50px;
+    border: 4px solid #313244; border-top-color: #89b4fa;
+    border-radius: 50%; animation: spin 1s linear infinite;
+}
+
+/* Футер */
+#gcodeViewerModal .modal-footer {
+    padding: 8px 16px;
+    background: #181825;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.gcode-hint {
+    font-size: 11px;
+    color: #a6adc8;
+    font-style: italic;
+    margin-left: auto;
+    padding-left: 8px;
+}
+
+/* Адаптация для WM */
+.wm-window .gcode-sidebar { width: 220px; }
+.wm-window .gcode-zoom-controls { bottom: 10px; right: 10px; }

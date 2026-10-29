@@ -1,0 +1,28 @@
+<div id="gamepadSetupModal" class="modal-overlay hidden" onclick="FAR.closeGamepadSetupOutside(event)">
+    <div class="modal-content gamepad-setup-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3>🎮 Настройка джойстика</h3>
+            <button class="close-btn" onclick="FAR.closeGamepadSetup()">✕</button>
+        </div>
+
+        <div class="modal-body">
+            <div class="gp-setup-status" id="gpSetupStatus">
+                Ожидание джойстика…
+            </div>
+
+            <p class="gp-setup-hint">
+                Каждому слоту можно назначить <b>кнопку/ось джойстика</b> (🎯) и <b>клавишу</b> (⌨️),
+                которая будет эмулироваться в активном окне. Действие слота зависит от выбранного
+                режима (Files / Keyboard / Both) — переключить его можно в тулбаре.
+            </p>
+
+            <div class="gp-setup-actions-list" id="gpSetupActionsList"></div>
+        </div>
+
+        <div class="modal-footer">
+            <span id="gpSetupFooter"></span>
+            <button class="btn-secondary" onclick="FAR.resetGamepadMap()">↺ По умолчанию</button>
+            <button class="btn-save" onclick="FAR.saveGamepadMap()">💾 Сохранить</button>
+        </div>
+    </div>
+</div>

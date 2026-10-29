@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FileServer — Получить токен доступа</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #1e1e2e; color: #cdd6f4;
+            min-height: 100vh; display: flex;
+            align-items: center; justify-content: center;
+            padding: 20px;
+        }
+        .card {
+            background: #313244;
+            border: 1px solid #45475a;
+            border-radius: 10px;
+            padding: 28px 32px;
+            width: 100%; max-width: 440px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        h1 {
+            font-size: 18px; color: #89b4fa;
+            margin-bottom: 6px;
+        }
+        p.sub {
+            font-size: 12px; color: #a6adc8;
+            margin-bottom: 20px; line-height: 1.5;
+        }
+        label {
+            display: block;
+            font-size: 12px; color: #a6adc8;
+            margin-bottom: 12px;
+        }
+        input {
+            display: block; width: 100%;
+            margin-top: 4px;
+            padding: 9px 12px;
+            background: #181825;
+            border: 1px solid #45475a;
+            border-radius: 5px;
+            color: #cdd6f4;
+            font-family: monospace; font-size: 13px;
+            outline: none;
+        }
+        input:focus { border-color: #89b4fa; }
+        button {
+            width: 100%; padding: 10px 18px;
+            background: #a6e3a1; color: #1e1e2e;
+            border: none; border-radius: 5px;
+            cursor: pointer; font-weight: bold;
+            font-size: 14px; margin-top: 6px;
+        }
+        button:hover { background: #94d98e; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .error {
+            color: #f38ba8; font-size: 12px;
+            margin-top: 12px; min-height: 16px;
+            white-space: pre-wrap;
+        }
+        .result {
+            margin-top: 20px; padding: 14px;
+            background: #181825;
+            border: 1px solid #45475a;
+            border-radius: 6px;
+            display: none;
+        }
+        .result.show { display: block; }
+        .result .token-label {
+            font-size: 11px; color: #a6adc8;
+            margin-bottom: 6px; text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .result .token {
+            font-family: monospace;
+            font-size: 11px; color: #a6e3a1;
+            background: #0e0e16;
+            padding: 10px 12px;
+            border-radius: 4px;
+            word-break: break-all;
+            line-height: 1.4;
+            margin-bottom: 8px;
+        }
+        .result .meta {
+            font-size: 11px; color: #a6adc8;
+            margin-bottom: 10px;
+        }
+        .result .examples {
+            font-size: 11px; color: #6c7086;
+            line-height: 1.6; margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #313244;
+        }
+        .result .examples code {
+            background: #0e0e16;
+            padding: 1px 5px; border-radius: 3px;
+            color: #f9e2af;
+            font-family: monospace;
+        }
+        .copy-btn {
+            width: auto;
+            display: inline-block;
+            padding: 5px 12px;
+            font-size: 12px;
+            background: #89b4fa;
+            color: #1e1e2e;
+            margin: 0;
+        }
+        .copy-btn:hover { background: #74c7ec; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>🔐 Получить токен доступа</h1>
+    <p class="sub">
+        Введите учётные данные. Токен действителен 24 часа
+        или до перезапуска сервера.
+    </p>
+
+    <label>Сервер
+        <input type="text" id="server" placeholder="http://127.0.0.1:8080" autocomplete="off">
+    </label>
+    <label>Имя пользователя
+        <input type="text" id="user" placeholder="admin" autocomplete="username">
+    </label>
+    <label>Пароль
+        <input type="password" id="pass" placeholder="••••••••" autocomplete="current-password">
+    </label>
+
+    <button id="loginBtn" onclick="login()">🔓 Получить токен</button>
+    <div class="error" id="error"></div>
+
+    <div class="result" id="result">
+        <div class="token-label">Токен доступа</div>
+        <div class="token" id="tokenValue"></div>
+        <div class="meta" id="tokenMeta"></div>
+        <button class="copy-btn" onclick="copyToken()">📋 Скопировать</button>
+        <div class="examples" id="examples"></div>
+    </div>
+</div>
+
+<script>
+    // Предзаполняем поле сервера адресом, с которого открыта страница
+    document.addEventListener('DOMContentLoaded', function () {
+        const serverEl = document.getElementById('server');
+        serverEl.value = window.location.origin;
+        document.getElementById('user').focus();
+    });
+
+    async function login() {
+        const server = document.getElementById('server').value.trim().replace(/\/+$/, '');
+        const user   = document.getElementById('user').value.trim();
+        const pass   = document.getElementById('pass').value;
+        const errEl  = document.getElementById('error');
+        const btn    = document.getElementById('loginBtn');
+        const resEl  = document.getElementById('result');
+
+        errEl.textContent = '';
+        resEl.classList.remove('show');
+
+        if (!server) { errEl.textContent = 'Укажите адрес сервера'; return; }
+        if (!user)   { errEl.textContent = 'Укажите имя пользователя'; return; }
+
+        btn.disabled = true;
+        btn.textContent = 'Подключение…';
+
+        try {
+            const res = await fetch(server + '/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user: user, pass: pass })
+            });
+
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+                throw new Error(data.error || ('HTTP ' + res.status));
+            }
+
+            showToken(server, data);
+        } catch (e) {
+            errEl.textContent = '❌ ' + (e.message || String(e));
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🔓 Получить токен';
+        }
+    }
+
+    function showToken(server, data) {
+        document.getElementById('tokenValue').textContent = data.token;
+
+        const exp = new Date(data.expiresAt);
+        document.getElementById('tokenMeta').textContent =
+            'Пользователь: ' + data.user +
+            '  •  действителен до ' + exp.toLocaleString('ru-RU');
+
+        document.getElementById('examples').innerHTML =
+            'Примеры использования:<br>' +
+            '<code>Authorization: Bearer ' + escapeHtml(shorten(data.token)) + '</code><br>' +
+            '<code>' + escapeHtml(server) + '/test/file.sfc?token=' + escapeHtml(shorten(data.token)) + '</code>';
+
+        document.getElementById('result').classList.add('show');
+    }
+
+    function shorten(t) {
+        if (!t) return '';
+        if (t.length <= 20) return t;
+        return t.substring(0, 10) + '…' + t.substring(t.length - 6);
+    }
+
+    function escapeHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function copyToken() {
+        const t = document.getElementById('tokenValue').textContent;
+        if (!t) return;
+        navigator.clipboard.writeText(t).then(function () {
+            const btn = document.querySelector('.copy-btn');
+            const old = btn.textContent;
+            btn.textContent = '✓ Скопировано';
+            setTimeout(function () { btn.textContent = old; }, 1500);
+        }).catch(function () {
+            // fallback
+            const ta = document.createElement('textarea');
+            ta.value = t;
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); } catch (e) {}
+            document.body.removeChild(ta);
+        });
+    }
+
+    // Enter в любом поле → login
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+            login();
+        }
+    });
+</script>
+</body>
+</html>

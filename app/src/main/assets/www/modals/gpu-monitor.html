@@ -1,0 +1,13 @@
+<div id="gpuMonitorModal" class="modal-overlay hidden" onclick="FAR.closeGpuMonitorOutside(event)">
+    <div class="modal-content gpu-modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="gpuMonitorTitle">🎮 Загрузка видеокарт</h3>
+            <div class="modal-header-actions">
+                <button class="close-btn" onclick="FAR.closeGpuMonitor()" title="Закрыть">✕</button>
+            </div>
+        </div>
+        <div class="modal-body gpu-modal-body">
+            <div id="gpuMonitorHost" class="gpu-host"></div>
+        </div>
+    </div>
+</div>

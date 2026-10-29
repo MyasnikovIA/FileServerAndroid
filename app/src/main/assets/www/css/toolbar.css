@@ -1,0 +1,39 @@
+.toolbar {
+    display: flex;
+    gap: 10px;
+    padding: 8px 10px;
+    background: #313244;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.toolbar button {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 12px;
+    background: #89b4fa;
+    color: #1e1e2e;
+    transition: background 0.2s;
+}
+.toolbar button:hover { background: #74c7ec; }
+.toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
+.toolbar .btn-danger { background: #f38ba8; }
+.toolbar .btn-danger:hover { background: #e06c8a; }
+.toolbar .btn-success { background: #a6e3a1; }
+.toolbar .btn-success:hover { background: #94d98e; }
+.toolbar .btn-warning { background: #f9e2af; }
+.toolbar .btn-warning:hover { background: #f5d38a; }
+.toolbar .btn-move { background: #fab387; }
+.toolbar .btn-move:hover { background: #f9a56c; }
+.toolbar .btn-download { background: #cba6f7; }
+.toolbar .btn-download:hover { background: #b48ee0; }
+.toolbar .btn-zip { background: #94e2d5; }
+.toolbar .btn-zip:hover { background: #7fd4c5; }
+.toolbar .btn-migrate { background: #eba0ac; color: #1e1e2e; }
+.toolbar .btn-migrate:hover { background: #e08a97; }
+.toolbar .btn-auth { background: #f5c2e7; color: #1e1e2e; }
+.toolbar .btn-auth:hover { background: #eba0d6; }

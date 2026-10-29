@@ -1,0 +1,13 @@
+<div id="browserModal" class="modal-overlay hidden" onclick="FAR.closeBrowserOutside(event)">
+    <div class="modal-content browser-modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="browserModalTitle">🌐 Браузер</h3>
+            <div class="modal-header-actions">
+                <button class="close-btn" onclick="FAR.closeBrowser()" title="Закрыть">✕</button>
+            </div>
+        </div>
+        <!-- Сюда _createBrowser() положит тулбар, адресную строку,
+             полосу закладок и iframe. -->
+        <div class="browser-host" id="browserModalHost"></div>
+    </div>
+</div>
