@@ -24,6 +24,25 @@ FAR.WM.openApp = async function (appId, opts) {
         return null;
     }
 
+    // ============================================================
+    // КРИТИЧНО: если у приложения есть directLaunch — вызываем его
+    // и НЕ пытаемся создавать WM-окно. Так работают:
+    //   • Android программы (android:...)
+    //   • Настройки Android (settings)
+    //   • Лаунчер по умолчанию (default-launcher)
+    //   • Обновить список (android:refresh)
+    // ============================================================
+    if (typeof def.directLaunch === 'function') {
+        console.log('[WM openApp] directLaunch: ' + appId);
+        try {
+            def.directLaunch();
+        } catch (e) {
+            console.error('[WM openApp] directLaunch failed:', appId, e);
+            FAR.toast('Ошибка запуска: ' + (e && e.message ? e.message : e), 'error');
+        }
+        return null;
+    }
+
     if (def.singleton && !opts.forceNew && !opts._restoring) {
         const existing = FAR.WM.state.windows.find(function (w) {
             return w.appId === appId;
@@ -33,11 +52,8 @@ FAR.WM.openApp = async function (appId, opts) {
             FAR.WM.focusWindow(existing.id);
 
             if (typeof def.onReopen === 'function' && opts.props) {
-                try {
-                    def.onReopen(existing, opts.props);
-                } catch (e) {
-                    console.warn('[WM app onReopen]', appId, e);
-                }
+                try { def.onReopen(existing, opts.props); }
+                catch (e) { console.warn('[WM app onReopen]', appId, e); }
             }
             return existing;
         }
@@ -61,6 +77,14 @@ FAR.WM.openApp = async function (appId, opts) {
             }
         }
     });
+
+    // Проверка: приложение без open() не должно создавать пустое окно
+    if (typeof def.open !== 'function') {
+        console.error('[WM app] у приложения нет open() и нет directLaunch: ' + appId);
+        try { FAR.WM.closeWindow(win.id, true); } catch (e) {}
+        FAR.toast('Приложение не может быть открыто', 'error');
+        return null;
+    }
 
     try {
         await def.open(win, win.props);
@@ -95,7 +119,7 @@ FAR.WM.registerApp({
 });
 
 // ============================================================
-// Приложение: Текстовый редактор (Notepad++)
+// Приложение: Текстовый редактор
 // ============================================================
 
 FAR.WM.registerApp({
@@ -110,12 +134,12 @@ FAR.WM.registerApp({
         await FAR.WM._mountTextEditor(win, props);
     },
     onClose: function (win) {
-        // Очистка при необходимости
+        /* нет */
     }
 });
 
 // ============================================================
-// Приложение: Браузер (внутри WM-окна)
+// Приложение: Браузер
 // ============================================================
 
 FAR.WM.registerApp({
@@ -288,8 +312,6 @@ FAR.WM.registerApp({
     onClose: function (win) { FAR.WM._finalizeViewer(win); }
 });
 
-// ПРИЛОЖЕНИЕ NES УДАЛЕНО
-
 // ============================================================
 // Приложение: EmulatorJS
 // ============================================================
@@ -364,7 +386,7 @@ FAR.WM.registerApp({
 });
 
 // ============================================================
-// Приложение: Выбор файла из БД (диалог)
+// Приложение: Выбор файла из БД
 // ============================================================
 
 FAR.WM.registerApp({

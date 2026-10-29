@@ -43,14 +43,36 @@
     // ============================================================
 
     function launchApp(pkg, activity) {
+        console.log('[AndroidPrograms] launchApp JS: pkg=' + pkg + ' act=' + activity);
+
         if (!pkg) {
+            console.warn('[AndroidPrograms] launchApp: empty pkg');
             if (window.FAR && typeof FAR.toast === 'function') {
                 FAR.toast('Не указан пакет', 'error');
             }
             return false;
         }
+
+        if (typeof window.AndroidBridge === 'undefined' || !window.AndroidBridge) {
+            console.error('[AndroidPrograms] window.AndroidBridge === undefined');
+            if (window.FAR && typeof FAR.toast === 'function') {
+                FAR.toast('Мост AndroidBridge недоступен', 'error');
+            }
+            return false;
+        }
+
+        if (typeof window.AndroidBridge.launchApp !== 'function') {
+            console.error('[AndroidPrograms] window.AndroidBridge.launchApp is not a function');
+            if (window.FAR && typeof FAR.toast === 'function') {
+                FAR.toast('Метод launchApp недоступен', 'error');
+            }
+            return false;
+        }
+
         try {
+            console.log('[AndroidPrograms] calling bridge.launchApp...');
             const ok = window.AndroidBridge.launchApp(pkg, activity || '');
+            console.log('[AndroidPrograms] bridge.launchApp returned: ' + ok);
             if (!ok) {
                 if (window.FAR && typeof FAR.toast === 'function') {
                     FAR.toast('Не удалось запустить: ' + pkg, 'error');
@@ -59,7 +81,7 @@
             }
             return true;
         } catch (e) {
-            console.error('[AndroidPrograms] launchApp exception:', e);
+            console.error('[AndroidPrograms] bridge.launchApp EXCEPTION:', e);
             if (window.FAR && typeof FAR.toast === 'function') {
                 FAR.toast('Ошибка: ' + e.message, 'error');
             }
