@@ -2,7 +2,7 @@
 // 42-wm-startmenu.js — меню Пуск с категориями и подменю
 // ============================================================
 
-console.log('[StartMenu] VERSION 2026-10-30 v7');
+console.log('[StartMenu] VERSION 2026-10-30 v8 — touch fix');
 
 FAR.WM.toggleStartMenu = function () {
     const sm = document.getElementById('wmStartMenu');
@@ -188,7 +188,7 @@ FAR.WM._showStartSubmenu = function (rowEl, categoryId, categoryIcon,
             '<span class="wm-si-label">' + FAR.escapeHtml(app.title) + '</span>';
         item.title = app.title;
 
-        item.addEventListener('click', function (e) {
+        item.addEventListener('pointerup', function (e) {
             e.preventDefault();
             e.stopPropagation();
 
@@ -282,7 +282,7 @@ FAR.WM._renderStartMenu = function (query) {
                 '<span class="wm-si-emoji">' + FAR.WM._renderAppIcon(app, 32) + '</span>' +
                 '<span class="wm-si-label">' + FAR.escapeHtml(app.title) + '</span>';
             item.title = app.title;
-            item.addEventListener('click', function (e) {
+            item.addEventListener('pointerup', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
                 try {
@@ -330,7 +330,7 @@ FAR.WM._renderStartMenu = function (query) {
         row.addEventListener('mouseleave', function () {
             FAR.WM._scheduleHideStartSubmenu();
         });
-        row.addEventListener('click', function (e) {
+        row.addEventListener('pointerup', function (e) {
             e.stopPropagation();
             if (FAR.WM._startSubmenuCategory !== cat.id) {
                 FAR.WM._showStartSubmenu(row, cat.id, cat.icon, cat.title, items);
@@ -344,16 +344,19 @@ FAR.WM._renderStartMenu = function (query) {
     astBtn.className = 'wm-start-item';
     astBtn.style.marginTop = '10px';
     astBtn.style.borderTop = '1px solid #313244';
-    astBtn.style.flexShrink = '0'; // Не сжимать
+    astBtn.style.flexShrink = '0';
     astBtn.innerHTML = '<span class="wm-si-emoji">🚀</span><span class="wm-si-label">Настройки автозапуска</span>';
     astBtn.title = 'Управление автозапуском';
-    astBtn.addEventListener('click', function(e) {
+
+    // Используем pointerup для поддержки тачскрина
+    astBtn.addEventListener('pointerup', function(e) {
         e.preventDefault();
         e.stopPropagation();
         console.log('[StartMenu] Clicked Autostart Settings');
         FAR.WM.closeStartMenu();
         FAR.WM.openApp('autostart_settings');
     });
+
     list.appendChild(astBtn);
 
     if (!anyShown) {
@@ -375,7 +378,7 @@ FAR.WM._bindStartMenuUI = function () {
     const btn = document.getElementById('wmStartBtn');
     if (btn && !btn._wmBound) {
         btn._wmBound = true;
-        btn.addEventListener('click', function (e) {
+        btn.addEventListener('pointerup', function (e) {
             e.stopPropagation();
             FAR.WM.toggleStartMenu();
         });
@@ -390,7 +393,7 @@ FAR.WM._bindStartMenuUI = function () {
             if (e.key === 'Escape') FAR.WM.closeStartMenu();
             else if (e.key === 'Enter') {
                 const first = document.querySelector('#wmStartList .wm-start-item');
-                if (first) first.click();
+                if (first) first.dispatchEvent(new PointerEvent('pointerup'));
             }
         });
     }
@@ -458,6 +461,7 @@ FAR.WM.logout = function () {
             return;
         }
 
+        // Если есть pkg или appId — это приложение
         if (s.pkg && window.AndroidBridge &&
             typeof window.AndroidBridge.launchApp === 'function') {
             try { window.AndroidBridge.launchApp(s.pkg, s.act); }

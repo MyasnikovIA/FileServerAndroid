@@ -448,9 +448,13 @@ FAR.WM.registerApp({
                 <!-- JS СКРИПТЫ -->
                 <div style="background:#181825; padding:12px; border-radius:6px; margin-bottom:16px;">
                     <h4 style="margin-top:0; color:#a6e3a1;">JS Скрипты</h4>
-                    <div style="display:flex; gap:8px; margin-bottom:12px;">
-                        <input type="text" id="astAddJsUrl" placeholder="URL (напр. js/custom.js)" style="flex:1; padding:6px 10px; background:#313244; border:1px solid #45475a; border-radius:4px; color:#cdd6f4; font-size:12px;">
+                    <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center;">
+                        <input type="text" id="astAddJsUrl" placeholder="js/custom.js" style="flex:1; padding:6px 10px; background:#313244; border:1px solid #45475a; border-radius:4px; color:#cdd6f4; font-size:12px;">
                         <button id="astBtnAddJs" style="padding:6px 12px; background:#a6e3a1; color:#1e1e2e; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Добавить</button>
+                    </div>
+                    <div style="font-size:10px; color:#6c7086; margin-bottom:8px;">
+                        Путь указывается относительно папки <b>www</b> (например: <code>js/custom.js</code>).<br>
+                        Можно использовать полные URL (например: <code>http://site.com/script.js</code>).
                     </div>
                     <div style="display:flex; flex-direction:column; gap:4px;">
                         ${(data.jsScripts || []).map(s => `<div style="display:flex; justify-content:space-between; align-items:center; background:#313244; padding:6px 10px; border-radius:4px;">
@@ -481,6 +485,11 @@ FAR.WM.registerApp({
                 <!-- ANDROID ПРИЛОЖЕНИЯ -->
                 <div style="background:#181825; padding:12px; border-radius:6px;">
                     <h4 style="margin-top:0; color:#a6e3a1;">Android Приложения</h4>
+                    ${availableAndroid.length === 0 ? `
+                        <div style="color:#f9e2af; font-size:12px; padding:8px; background:#313244; border-radius:4px; margin-bottom:8px;">
+                            ⚠️ Нет доступных Android-приложений.<br>Список отображается только при работе внутри приложения на Android-устройстве.
+                        </div>
+                    ` : ''}
                     <div style="display:flex; gap:8px; margin-bottom:12px;">
                         <select id="astAddAndroidSelect" style="flex:1; padding:6px 10px; background:#313244; border:1px solid #45475a; border-radius:4px; color:#cdd6f4; font-size:12px;">
                             <option value="">-- Выберите приложение --</option>
