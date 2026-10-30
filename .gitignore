@@ -33,3 +33,5 @@ local.properties
 .swp
 ehthumbs.db
 Thumbs.db
+
+gradle/wrapper/gradle-wrapper.jar
