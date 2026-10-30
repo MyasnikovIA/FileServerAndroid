@@ -12,7 +12,13 @@
 
                 <div class="conn-field">
                     <label for="connUrl">Адрес FileServer</label>
-                    <input type="text" id="connUrl" placeholder="http://127.0.0.1:8080" autocomplete="off">
+                    <div style="display:flex; gap:6px;">
+                        <input type="text" id="connUrl" placeholder="http://127.0.0.1:8080" autocomplete="off" style="flex:1;">
+                        <button type="button" class="btn-cancel" style="padding:0 12px; font-size:12px; white-space:nowrap;"
+                                onclick="document.getElementById('connUrl').value='http://127.0.0.1:8080'; document.getElementById('connUser').value='admin'; document.getElementById('connPass').value='admin';">
+                            🏠 Локальный
+                        </button>
+                    </div>
                 </div>
 
                 <div class="conn-field">

@@ -1,22 +1,34 @@
 // ============================================================
 // 38-browser-viewer.js — «Браузер» с IFRAME.
 // ============================================================
-//
-// Работает в двух режимах:
-//   • Панельный  → открывается как модалка на весь экран.
-//   • Оконный    → WM-окно (ресайз, снапы, минимизация).
-//
-// Общий UI строится функцией FAR._createBrowser(hostEl, opts).
-// Она возвращает API-объект с методами navigate/back/forward/etc.
-//
-// Закладки — отдельный модуль js/39-browser-bookmarks.js.
-// Синхронизация: каждый инстанс браузера подписывается на
-// FAR.Bookmarks.subscribe() и обновляет полосу закладок.
-// ============================================================
 
-// ------------------------------------------------------------
-// Общая точка входа: открыть в модалке ИЛИ WM-окне.
-// ------------------------------------------------------------
+FAR._browserIsLocalUrl = function (url) {
+    if (!url || typeof url !== 'string') return false;
+    try {
+        const parsed = new URL(url, location.href);
+        const h = parsed.hostname;
+        if (!h) return false;
+        return h === '127.0.0.1'
+            || h === 'localhost'
+            || h === '[::1]'
+            || h === '::1'
+            || h === location.hostname;
+    } catch (e) {
+        return false;
+    }
+};
+
+FAR._openNativeBrowser = function (url, title) {
+    if (!window.AndroidBridge) return false;
+    if (typeof window.AndroidBridge.openInAppBrowser !== 'function') return false;
+    try {
+        const ok = window.AndroidBridge.openInAppBrowser(url || '', title || '');
+        return !!ok;
+    } catch (e) {
+        console.warn('[browser] openInAppBrowser failed:', e);
+        return false;
+    }
+};
 
 FAR.openBrowser = function (url, opts) {
     opts = opts || {};
@@ -36,10 +48,6 @@ FAR.openBrowser = function (url, opts) {
     return FAR._openBrowserModal(url, opts);
 };
 
-// ------------------------------------------------------------
-// Модалка (панельный режим)
-// ------------------------------------------------------------
-
 FAR._browserModalApi = null;
 
 FAR._openBrowserModal = function (url, opts) {
@@ -53,7 +61,6 @@ FAR._openBrowserModal = function (url, opts) {
         return;
     }
 
-    // Уничтожаем предыдущий инстанс
     if (FAR._browserModalApi) {
         try { FAR._browserModalApi.destroy(); } catch (e) {}
         FAR._browserModalApi = null;
@@ -61,7 +68,6 @@ FAR._openBrowserModal = function (url, opts) {
 
     if (titleEl) titleEl.textContent = opts.title || '🌐 Браузер';
 
-    // Создаём UI
     FAR._browserModalApi = FAR._createBrowser(host, {
         url: url,
         homeUrl: opts.homeUrl || url || '',
@@ -73,7 +79,6 @@ FAR._openBrowserModal = function (url, opts) {
 
     modal.classList.remove('hidden');
 
-    // Автофокус в адресную строку
     setTimeout(function () {
         try {
             const input = host.querySelector('.browser-url-input');
@@ -96,10 +101,6 @@ FAR.closeBrowserOutside = function (e) {
     if (e.target === e.currentTarget) FAR.closeBrowser();
 };
 
-// ------------------------------------------------------------
-// Проверка типа файла
-// ------------------------------------------------------------
-
 FAR.isHtmlFile = function (item) {
     if (!item || item.isFolder) return false;
     const name = item.name || item.path || '';
@@ -108,10 +109,6 @@ FAR.isHtmlFile = function (item) {
     const ct = (item.contentType || '').toLowerCase();
     return ct.indexOf('text/html') === 0;
 };
-
-// ------------------------------------------------------------
-// Открытие файла из панели
-// ------------------------------------------------------------
 
 FAR.openBrowserFromItem = function (item, side) {
     if (!item || item.isFolder) {
@@ -128,10 +125,6 @@ FAR.openBrowserFromItem = function (item, side) {
         homeUrl: direct
     });
 };
-
-// ------------------------------------------------------------
-// Нормализация ввода URL
-// ------------------------------------------------------------
 
 FAR._browserNormalizeInput = function (input) {
     let s = String(input || '').trim();
@@ -154,7 +147,11 @@ FAR._browserNormalizeInput = function (input) {
     }
 
     if (/^[^\s/]+\.[^\s/]+/.test(s) && !s.includes(' ')) {
-        return 'http://' + s;
+        // Если указан порт или локальный IP — используем http://
+        if (/^[^\s/]+:\d+/.test(s) || /^(\d{1,3}\.){3}\d{1,3}/.test(s)) {
+            return 'http://' + s;
+        }
+        return 'https://' + s;
     }
 
     const base = FAR._browserBaseUrl();
@@ -175,19 +172,11 @@ FAR._browserBaseUrl = function () {
     return location.origin;
 };
 
-// ============================================================
-// ЯДРО: FAR._createBrowser(hostEl, opts)
-// ============================================================
-//
-// Строит весь UI внутри hostEl и возвращает API-объект.
-// hostEl — это либо #browserModalHost, либо win.bodyEl.
-
 FAR._createBrowser = function (hostEl, opts) {
     opts = opts || {};
 
     if (!hostEl) throw new Error('_createBrowser: hostEl required');
 
-    // ---- Разметка ----
     hostEl.innerHTML =
         '<div class="browser-toolbar">' +
         '<button class="browser-btn bm-back"    title="Назад">◀</button>' +
@@ -199,6 +188,7 @@ FAR._createBrowser = function (hostEl, opts) {
         '<button class="browser-btn bm-star browser-btn-star" title="Добавить в закладки">☆</button>' +
         '<button class="browser-btn bm-go browser-btn-go" title="Перейти">→</button>' +
         '<button class="browser-btn bm-external" title="Открыть во внешнем браузере">↗</button>' +
+        '<button class="browser-btn bm-native" title="Открыть в нативном браузере (если сайт не грузится)">🖥️</button>' +
         '</div>' +
         '<div class="browser-bookmarks-bar"></div>' +
         '<div class="browser-progress"><div class="browser-progress-fill"></div></div>' +
@@ -224,6 +214,7 @@ FAR._createBrowser = function (hostEl, opts) {
     const elStar     = $('.bm-star');
     const elGo       = $('.bm-go');
     const elExternal = $('.bm-external');
+    const elNative   = $('.bm-native');
     const elBookmarksBar = $('.browser-bookmarks-bar');
     const elProgress = $('.browser-progress');
     const elProgressFill = $('.browser-progress-fill');
@@ -231,12 +222,16 @@ FAR._createBrowser = function (hostEl, opts) {
     const elStatus   = $('.browser-status');
     const elInfo     = $('.browser-info');
 
-    // ---- Trusted → снимаем sandbox ----
     if (opts.trusted) {
         elIframe.removeAttribute('sandbox');
     }
 
-    // ---- Внутреннее состояние ----
+    const hasNative = !!(window.AndroidBridge
+        && typeof window.AndroidBridge.openInAppBrowser === 'function');
+    if (!hasNative && elNative) {
+        elNative.style.display = 'none';
+    }
+
     const S = {
         url: '',
         homeUrl: opts.homeUrl || '',
@@ -245,7 +240,6 @@ FAR._createBrowser = function (hostEl, opts) {
         destroyed: false
     };
 
-    // ---- Утилиты ----
     function setStatus(text, cls) {
         elStatus.textContent = text || '';
         elStatus.className = 'browser-status' + (cls ? ' ' + cls : '');
@@ -282,11 +276,10 @@ FAR._createBrowser = function (hostEl, opts) {
             pageTitle = elIframe.contentDocument && elIframe.contentDocument.title
                 ? elIframe.contentDocument.title
                 : '';
-        } catch (e) { /* cross-origin */ }
+        } catch (e) { }
         opts.onChangeTitle(pageTitle ? '🌐 ' + pageTitle : '🌐 Браузер');
     }
 
-    // ---- Навигация ----
     async function navigate(rawUrl, options) {
         options = options || {};
         const url = FAR._browserNormalizeInput(rawUrl);
@@ -295,7 +288,6 @@ FAR._createBrowser = function (hostEl, opts) {
             return;
         }
 
-        // HEAD-проверка для своих адресов
         const isOwn = FAR._isOurServer && FAR._isOurServer(url);
         if (isOwn && !options.skipHeadCheck) {
             try {
@@ -334,7 +326,6 @@ FAR._createBrowser = function (hostEl, opts) {
         }
     }
 
-    // ---- Кнопки ----
     elBack.addEventListener('click', function () {
         if (S.historyIdx <= 0) return;
         S.historyIdx--;
@@ -353,7 +344,6 @@ FAR._createBrowser = function (hostEl, opts) {
         progressStop();
         setStatus('Остановлено', '');
         try {
-            // Прервать загрузку: переустанавливаем src текущего URL.
             if (S.url) elIframe.src = S.url;
         } catch (e) {}
     });
@@ -371,11 +361,20 @@ FAR._createBrowser = function (hostEl, opts) {
         window.open(S.url, '_blank', 'noopener');
     });
 
+    if (elNative) {
+        elNative.addEventListener('click', function () {
+            if (!S.url) { FAR.toast('Нет активного URL', 'warning'); return; }
+            const title = '🌐 ' + S.url.replace(/^https?:\/\//, '').split('/')[0];
+            if (!FAR._openNativeBrowser(S.url, title)) {
+                FAR.toast('Нативный браузер недоступен', 'warning');
+            }
+        });
+    }
+
     elInput.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') { e.preventDefault(); elGo.click(); }
     });
 
-    // ---- Звёздочка (добавить/убрать из закладок) ----
     function updateStar() {
         if (!S.url) {
             elStar.textContent = '☆';
@@ -394,12 +393,10 @@ FAR._createBrowser = function (hostEl, opts) {
             if (elIframe.contentDocument && elIframe.contentDocument.title) {
                 title = elIframe.contentDocument.title;
             }
-        } catch (e) { /* cross-origin */ }
+        } catch (e) { }
         FAR.Bookmarks.toggle({ url: S.url, title: title });
-        // updateStar() вызовется через subscribe()
     });
 
-    // ---- Полоса закладок ----
     function renderBookmarks(items) {
         elBookmarksBar.innerHTML = '';
 
@@ -448,13 +445,11 @@ FAR._createBrowser = function (hostEl, opts) {
         });
     }
 
-    // Подписка на изменения закладок (с обновлением активного чипа)
     const unsubscribeBookmarks = FAR.Bookmarks.subscribe(function (items) {
         renderBookmarks(items);
         updateStar();
     });
 
-    // ---- События iframe ----
     elIframe.addEventListener('load', function () {
         if (S.destroyed) return;
         progressStop();
@@ -467,7 +462,7 @@ FAR._createBrowser = function (hostEl, opts) {
                 S.url = realUrl;
                 setUrlInput(realUrl);
             }
-        } catch (e) { /* cross-origin */ }
+        } catch (e) { }
 
         syncTitleFromIframe();
 
@@ -476,7 +471,7 @@ FAR._createBrowser = function (hostEl, opts) {
 
         updateNavButtons();
         updateStar();
-        renderBookmarks(FAR.Bookmarks.all);   // обновить активный чип
+        renderBookmarks(FAR.Bookmarks.all);
     });
 
     elIframe.addEventListener('error', function () {
@@ -485,7 +480,6 @@ FAR._createBrowser = function (hostEl, opts) {
         setStatus('Ошибка загрузки', 'error');
     });
 
-    // ---- Стартовая навигация ----
     if (opts.url) {
         navigate(opts.url, { pushHistory: true });
     } else {
@@ -493,7 +487,6 @@ FAR._createBrowser = function (hostEl, opts) {
         updateStar();
     }
 
-    // ---- API ----
     return {
         navigate: navigate,
         getState: function () { return S; },
@@ -505,12 +498,7 @@ FAR._createBrowser = function (hostEl, opts) {
     };
 };
 
-// ------------------------------------------------------------
-// Инициализация (вызывается из 23-main.js)
-// ------------------------------------------------------------
-
 FAR.initBrowser = function () {
-    // ESC в модалке — закрыть
     document.addEventListener('keydown', function (e) {
         if (e.key !== 'Escape') return;
         const modal = document.getElementById('browserModal');

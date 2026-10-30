@@ -1,15 +1,6 @@
 // ============================================================
 // 50-wm-misc.js — Утилиты, заглушки и перехват openFile
 // ============================================================
-//
-// FIX 2026-10-30 v5:
-//   • Подключение к удалённому рабочему столу использует нативный
-//     loginRemoteAndSetCookie, который возвращает JSON с диагностикой.
-//   • Пользователь видит, какие URL пробовали, какие ошибки получили.
-//   • Добавлена кнопка «Открыть без авторизации» — на случай, если
-//     сервер недоступен для нативного логина, но веб-клиент сам
-//     покажет свою форму входа.
-// ============================================================
 
 FAR.WM._mountConnectionUI = function (win) {
     win.bodyEl.innerHTML =
@@ -39,7 +30,6 @@ FAR.WM._mountConnectionUI = function (win) {
     const cancelBtn = win.bodyEl.querySelector('[data-role="cancel"]');
     const connectBtn = win.bodyEl.querySelector('[data-role="connect"]');
 
-    // Загружаем последние значения
     let def = { url: '', user: '', pass: '' };
     try {
         const saved = localStorage.getItem('filebd_rd_conn');
@@ -63,25 +53,7 @@ FAR.WM._mountConnectionUI = function (win) {
         });
     }
 
-    function showSkipButton(originalUrl) {
-        extraEl.innerHTML = '';
-        const btn = document.createElement('button');
-        btn.textContent = '🌐 Открыть без авторизации';
-        btn.style.cssText = 'padding:8px 18px;background:#f9e2af;color:#1e1e2e;border:none;border-radius:5px;cursor:pointer;font-weight:bold;';
-        btn.onclick = function () {
-            let finalUrl = originalUrl.replace(/\/+$/, '');
-            if (!/^https?:\/\//i.test(finalUrl)) finalUrl = 'http://' + finalUrl;
-            openBrowser(finalUrl + '/', userEl.value.trim());
-        };
-        const hint = document.createElement('div');
-        hint.style.cssText = 'font-size:11px;color:#a6adc8;line-height:1.4;';
-        hint.textContent = 'Если сервер отвечает, но не принимает нативный логин, ' +
-            'веб-клиент FileServer покажет свою форму входа.';
-        extraEl.appendChild(btn);
-        extraEl.appendChild(hint);
-    }
-
-    connectBtn.onclick = function () {
+    connectBtn.onclick = async function () {
         let cfgUrl = urlEl.value.trim();
         const cfgUser = userEl.value.trim();
         const cfgPass = passEl.value;
@@ -101,45 +73,41 @@ FAR.WM._mountConnectionUI = function (win) {
         errEl.textContent = '';
         extraEl.innerHTML = '';
 
+        if (!window.AndroidBridge) {
+            openBrowser(cfgUrl + '/', cfgUser);
+            return;
+        }
+
         let authOk = false;
         let finalUrl = cfgUrl;
         let diagnostics = '';
 
-        // --- Попытка нативного логина ---
-        if (window.AndroidBridge &&
-            typeof window.AndroidBridge.loginRemoteAndSetCookie === 'function') {
-            try {
-                const raw = window.AndroidBridge.loginRemoteAndSetCookie(
-                    cfgUrl, cfgUser, cfgPass);
-                let res = null;
-                try { res = JSON.parse(raw || '{}'); } catch (e) { res = null; }
+        try {
+            const raw = window.AndroidBridge.loginRemoteAndSetCookie(
+                cfgUrl, cfgUser, cfgPass);
+            let res = null;
+            try { res = JSON.parse(raw || '{}'); } catch (e) { res = null; }
 
-                if (res && res.ok) {
-                    authOk = true;
-                    if (res.url) finalUrl = res.url;
-                    console.log('[RemoteDesktop] native auth OK:', res.url,
-                                'scheme=' + res.scheme, 'port=' + res.port);
-                } else {
-                    // Собираем диагностику
-                    const tried = (res && res.tried) || [];
-                    const lines = tried.map(function (t) {
-                        const u = String(t.url || '').replace('/api/login', '');
-                        const err = t.error || 'unknown';
-                        const msg = t.message ? ' — ' + t.message : '';
-                        return '• ' + u + '\n  ' + err + msg;
-                    });
-                    diagnostics = lines.length
-                        ? lines.join('\n')
-                        : ('Ошибка: ' + ((res && (res.error || res.message)) || 'unknown'));
-                    console.warn('[RemoteDesktop] native auth failed:\n' + diagnostics);
-                }
-            } catch (e) {
-                console.error('[RemoteDesktop] native auth exception:', e);
-                diagnostics = 'Исключение: ' + (e.message || String(e));
+            if (res && res.ok) {
+                authOk = true;
+                if (res.url) finalUrl = res.url;
+                console.log('[RemoteDesktop] native auth OK:', res.url);
+            } else {
+                const tried = (res && res.tried) || [];
+                const lines = tried.map(function (t) {
+                    const u = String(t.url || '').replace('/api/login', '');
+                    const err = t.error || 'unknown';
+                    const msg = t.message ? ' — ' + t.message : '';
+                    return '• ' + u + '\n  ' + err + msg;
+                });
+                diagnostics = lines.length
+                    ? lines.join('\n')
+                    : ('Ошибка: ' + ((res && (res.error || res.message)) || 'unknown'));
+                console.warn('[RemoteDesktop] native auth failed:\n' + diagnostics);
             }
-        } else {
-            console.warn('[RemoteDesktop] AndroidBridge unavailable');
-            diagnostics = 'AndroidBridge недоступен (запуск не в APK?)';
+        } catch (e) {
+            console.error('[RemoteDesktop] native auth exception:', e);
+            diagnostics = 'Исключение: ' + (e.message || String(e));
         }
 
         if (authOk) {
@@ -147,11 +115,36 @@ FAR.WM._mountConnectionUI = function (win) {
             return;
         }
 
-        // --- Провал: показываем ошибку + кнопку "Открыть без авторизации" ---
-        errEl.textContent = '⚠️ Авторизация не удалась.\n\n' + diagnostics;
+        errEl.textContent = '⚠️ Нативная авторизация не удалась.\n\n' + diagnostics;
+
+        // Кнопка 1: Открыть в самом приложении (через iframe)
+        const btn = document.createElement('button');
+        btn.textContent = '🌐 Открыть в приложении';
+        btn.style.cssText = 'padding:8px 18px;background:#f9e2af;color:#1e1e2e;border:none;border-radius:5px;cursor:pointer;font-weight:bold;';
+        btn.onclick = function () {
+            openBrowser(cfgUrl + '/', cfgUser);
+        };
+        extraEl.appendChild(btn);
+
+        // Кнопка 2: Открыть во внешнем Chrome (если WebView блокируется)
+        if (window.AndroidBridge && typeof window.AndroidBridge.openExternalUrl === 'function') {
+            const btnExt = document.createElement('button');
+            btnExt.textContent = '🌍 Открыть в Chrome';
+            btnExt.style.cssText = 'padding:8px 18px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:5px;cursor:pointer;font-weight:bold;';
+            btnExt.onclick = function () {
+                window.AndroidBridge.openExternalUrl(cfgUrl + '/');
+                FAR.WM.closeWindow(win.id, true);
+            };
+            extraEl.appendChild(btnExt);
+        }
+
+        const hint = document.createElement('div');
+        hint.style.cssText = 'font-size:11px;color:#a6adc8;line-height:1.4;margin-top:4px;';
+        hint.textContent = 'Если приложение не открывает сервер (ERR_CONNECTION_TIMED_OUT), используйте внешний Chrome — он использует другой сетевой стек.';
+        extraEl.appendChild(hint);
+
         connectBtn.disabled = false;
         connectBtn.textContent = 'Повторить';
-        showSkipButton(cfgUrl);
     };
 };
 

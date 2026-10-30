@@ -88,8 +88,22 @@ public class ApiHandler implements HttpHandler {
         if (!path.startsWith("/api/")) return false;
         String after = path.substring("/api/".length());
         if (after.isEmpty()) return false;
+
         int slash = after.indexOf('/');
         String shareName = slash < 0 ? after : after.substring(0, slash);
+
+        // Защита от перехвата системных эндпоинтов и прокси
+        if ("proxy".equals(shareName) || "login".equals(shareName) ||
+                "logout".equals(shareName) || "info".equals(shareName) ||
+                "whoami".equals(shareName) || "list".equals(shareName) ||
+                "stat".equals(shareName) || "read".equals(shareName) ||
+                "write".equals(shareName) || "mkdir".equals(shareName) ||
+                "delete".equals(shareName) || "move".equals(shareName) ||
+                "copy".equals(shareName) || "events".equals(shareName) ||
+                "public".equals(shareName)) {
+            return false;
+        }
+
         String relDecoded = slash < 0 ? "" : after.substring(slash + 1);
         if (shareName.isEmpty()) return false;
 

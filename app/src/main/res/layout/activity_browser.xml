@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#1e1e2e">
+
+    <!-- Тулбар с адресной строкой -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="#181825"
+        android:padding="4dp"
+        android:gravity="center_vertical">
+
+        <Button
+            android:id="@+id/brBack"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:text="◀"
+            android:textColor="#cdd6f4"
+            android:background="#313244"
+            android:textSize="14sp"
+            android:minWidth="0dp"
+            android:padding="0dp"/>
+
+        <Button
+            android:id="@+id/brFwd"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="2dp"
+            android:text="▶"
+            android:textColor="#cdd6f4"
+            android:background="#313244"
+            android:textSize="14sp"
+            android:minWidth="0dp"
+            android:padding="0dp"/>
+
+        <Button
+            android:id="@+id/brReload"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="2dp"
+            android:text="⟳"
+            android:textColor="#cdd6f4"
+            android:background="#313244"
+            android:textSize="16sp"
+            android:minWidth="0dp"
+            android:padding="0dp"/>
+
+        <EditText
+            android:id="@+id/brAddress"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:background="#313244"
+            android:textColor="#cdd6f4"
+            android:textSize="13sp"
+            android:singleLine="true"
+            android:paddingHorizontal="10dp"
+            android:hint="Введите адрес или поиск"
+            android:textColorHint="#6c7086"
+            android:inputType="textUri"
+            android:imeOptions="actionGo"/>
+
+        <Button
+            android:id="@+id/brGo"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="2dp"
+            android:text="→"
+            android:textColor="#1e1e2e"
+            android:background="#89b4fa"
+            android:textSize="16sp"
+            android:minWidth="0dp"
+            android:padding="0dp"/>
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/brProgress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:progressTint="#a6e3a1"
+        android:visibility="gone"/>
+
+    <WebView
+        android:id="@+id/brWebView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+</LinearLayout>

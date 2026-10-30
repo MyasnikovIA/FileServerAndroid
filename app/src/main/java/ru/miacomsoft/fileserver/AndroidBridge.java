@@ -63,9 +63,6 @@ public class AndroidBridge {
 
     private static volatile String sPendingInstallPath = null;
 
-    // Таймаут TCP-подключения к удалённому серверу.
-    // 15 секунд — компромисс: не слишком долго ждать, но хватает
-    // для медленных мобильных сетей / планетарных пингов.
     private static final int REMOTE_CONNECT_TIMEOUT_MS = 15000;
     private static final int REMOTE_READ_TIMEOUT_MS    = 15000;
 
@@ -81,7 +78,61 @@ public class AndroidBridge {
     public boolean isAndroidApp() { return true; }
 
     // ============================================================
-    // Список приложений
+    // НАТИВНЫЙ БРАУЗЕР
+    // ============================================================
+
+    /**
+     * Открывает URL в нативном WebView-браузере (BrowserActivity).
+     *
+     * Используется из JS: FAR.openBrowser() на Android для внешних
+     * адресов — вместо iframe, который блокируется заголовками
+     * X-Frame-Options и CSP frame-ancestors.
+     *
+     * @param url  адрес для открытия
+     * @param title опциональный заголовок окна
+     * @return true если удалось запустить активити
+     */
+    @JavascriptInterface
+    public boolean openInAppBrowser(String url, String title) {
+        if (url == null || url.isEmpty()) url = "https://www.google.com";
+        Log.i(TAG, "openInAppBrowser: " + url);
+        try {
+            Intent intent = new Intent(context, BrowserActivity.class);
+            intent.putExtra(BrowserActivity.EXTRA_URL, url);
+            if (title != null && !title.isEmpty()) {
+                intent.putExtra(BrowserActivity.EXTRA_TITLE, title);
+            }
+
+            // Предпочтительный способ: запускаем из Activity, чтобы
+            // браузер попал в тот же task и кнопка «назад» в нём
+            // возвращала в MainActivity (а не в лаунчер).
+            if (activity != null && !activity.isDestroyed()
+                    && Build.VERSION.SDK_INT >= 17) {
+                try {
+                    activity.startActivity(intent);
+                    return true;
+                } catch (Exception inner) {
+                    Log.w(TAG, "activity.startActivity failed, fallback", inner);
+                }
+            }
+
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "openInAppBrowser failed", e);
+            return false;
+        }
+    }
+
+    /** Упрощённая перегрузка — JS может вызвать с одним аргументом. */
+    @JavascriptInterface
+    public boolean openInAppBrowser(String url) {
+        return openInAppBrowser(url, null);
+    }
+
+    // ============================================================
+    // Приложения Android
     // ============================================================
 
     @JavascriptInterface
@@ -156,10 +207,6 @@ public class AndroidBridge {
             if (bmp != null) try { bmp.recycle(); } catch (Exception ignored) {}
         }
     }
-
-    // ============================================================
-    // Запуск приложения
-    // ============================================================
 
     @JavascriptInterface
     public boolean launchApp(final String pkg, final String activityName) {
@@ -408,7 +455,7 @@ public class AndroidBridge {
     }
 
     // ============================================================
-    // Настройки / лаунчер
+    // Настройки
     // ============================================================
 
     @JavascriptInterface
@@ -463,19 +510,24 @@ public class AndroidBridge {
         return false;
     }
 
+    @JavascriptInterface
+    public boolean openExternalUrl(String url) {
+        if (url == null || url.isEmpty()) return false;
+        Log.i(TAG, "openExternalUrl: " + url);
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(intent);
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "openExternalUrl failed", e);
+            return false;
+        }
+    }
+
     // ============================================================
-    // Подключение к удалённому рабочему столу (с диагностикой)
+    // Логин на удалённый FileServer
     // ============================================================
-    //
-    // Возвращает СТРОКУ JSON. Пример:
-    //   {"ok":true,"scheme":"https","port":8080,"url":"https://www.smwrap.ru:8080","token":"..."}
-    //   {"ok":false,"error":"all_attempts_failed","tried":[
-    //       {"url":"https://www.smwrap.ru:8080/api/login","error":"timeout",
-    //        "message":"Сервер не отвечает (порт не доступен)"},
-    //       {"url":"http://www.smwrap.ru:8080/api/login","error":"timeout",...}
-    //   ]}
-    //
-    // JS разбирает JSON и показывает пользователю подробности.
 
     @JavascriptInterface
     public String loginRemoteAndSetCookie(String url, String user, String pass) {
@@ -483,7 +535,6 @@ public class AndroidBridge {
         try {
             result.put("ok", false);
 
-            // --- Разбор входного URL ---
             URL parsed;
             try {
                 parsed = new URL(url);
@@ -508,14 +559,10 @@ public class AndroidBridge {
             Log.i(TAG, "loginRemoteAndSetCookie: host=" + host
                     + " port=" + port + " scheme=" + scheme + " user=" + user);
 
-            // --- Список URL, которые будем пробовать ---
-            // Порядок важен: сначала «как есть», потом альтернатива.
             List<String> attempts = new ArrayList<>();
             String primaryBase = scheme + "://" + host + ":" + port;
             attempts.add(primaryBase + "/api/login");
 
-            // Если указан HTTPS — попробуем и HTTP на том же порту.
-            // Некоторые серверы на нестандартном порту отвечают только HTTP.
             if ("https".equals(scheme)) {
                 attempts.add("http://" + host + ":" + port + "/api/login");
             }
@@ -526,7 +573,6 @@ public class AndroidBridge {
             for (String loginUrl : attempts) {
                 JSONObject att = tryRemoteLogin(loginUrl, user, pass);
 
-                // Запоминаем для диагностики
                 JSONObject diag = new JSONObject();
                 diag.put("url", loginUrl);
                 diag.put("error", att.optString("error", "unknown"));
@@ -534,7 +580,6 @@ public class AndroidBridge {
                 tried.put(diag);
 
                 if (att.optBoolean("ok")) {
-                    // --- Успех: ставим cookie ---
                     String token = att.optString("token", "");
                     String successBase = loginUrl.substring(0,
                             loginUrl.length() - "/api/login".length());
@@ -560,7 +605,6 @@ public class AndroidBridge {
                 }
             }
 
-            // --- Всё провалилось ---
             result.put("error", "all_attempts_failed");
             Log.e(TAG, "loginRemoteAndSetCookie: ALL FAILED. tried=" + tried);
         } catch (Exception e) {
@@ -573,10 +617,6 @@ public class AndroidBridge {
         return result.toString();
     }
 
-    /**
-     * Одна попытка логина. Возвращает JSON с полями:
-     *   ok (boolean), error (string), message (string), token (string)
-     */
     private JSONObject tryRemoteLogin(String loginUrl, String user, String pass) {
         JSONObject att = new JSONObject();
         HttpURLConnection conn = null;
@@ -590,8 +630,9 @@ public class AndroidBridge {
             conn.setReadTimeout(REMOTE_READ_TIMEOUT_MS);
             conn.setDoOutput(true);
             conn.setRequestProperty("Content-Type", "application/json");
+            // Подмена User-Agent для обхода блокировок на сервере
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
 
-            // Для HTTPS — ослабляем SSL (self-signed сертификаты).
             if (conn instanceof HttpsURLConnection) {
                 HttpsURLConnection hc = (HttpsURLConnection) conn;
                 try {
@@ -646,7 +687,6 @@ public class AndroidBridge {
                 return att;
             }
 
-            // Не 200 — читаем тело ошибки для диагностики.
             String errBody = "";
             try (InputStream es = conn.getErrorStream()) {
                 if (es != null) {

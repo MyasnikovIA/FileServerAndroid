@@ -121,7 +121,7 @@ FAR.submitConnModal = async function () {
         let msg = e && e.message ? e.message : String(e);
         if (e && e.status === 401) msg = 'Неверный логин или пароль (401)';
         if (e && e.status === 404) msg = 'Не найдено (404). Проверьте адрес.';
-        if (e && e.name === 'TypeError') msg = 'Не удалось подключиться (сеть/CORS).';
+        if (e && e.name === 'NetworkError' || msg === 'Failed to fetch') msg = 'Не удалось подключиться (сеть/CORS). Проверьте доступность сервера.';
         errEl.textContent = '❌ ' + msg;
         btn.disabled = false;
         btn.textContent = 'Подключиться';

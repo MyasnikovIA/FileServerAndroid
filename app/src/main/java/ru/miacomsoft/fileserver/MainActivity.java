@@ -61,10 +61,6 @@ public class MainActivity extends AppCompatActivity {
     private static final long RELOAD_APPS_MIN_INTERVAL_MS = 30000L;
     private long lastReloadAppsAt = 0L;
 
-    // ============================================================
-    // Нативный перехват тапа на элемент с data-launch-pkg.
-    // Работает как backup к JS-обработчику.
-    // ============================================================
     private float _downX = 0f, _downY = 0f;
     private long _downTime = 0L;
 
@@ -95,7 +91,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        Log.i("MainActivity", "VERSION 2026-10-30 v3 — native touch launcher installed");
+        Log.i("MainActivity", "VERSION 2026-10-30 v4 — fixed lambda parameter shadowing");
 
         getWindow().setFlags(
                 WindowManager.LayoutParams.FLAG_FULLSCREEN,
@@ -310,6 +306,17 @@ public class MainActivity extends AppCompatActivity {
         s.setBuiltInZoomControls(false);
         s.setJavaScriptCanOpenWindowsAutomatically(false);
 
+        // ============================================================
+        // КРИТИЧЕСКИ ВАЖНО: Подмена User-Agent!
+        // Многие серверы и роутеры блокируют запросы, если видят,
+        // что это WebView, а не настоящий Chrome.
+        // ============================================================
+        String ua = s.getUserAgentString();
+        if (ua != null && ua.contains("wv")) {
+            ua = ua.replace("; wv", "");
+        }
+        s.setUserAgentString("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
+
         CookieManager cm = CookieManager.getInstance();
         cm.setAcceptCookie(true);
         cm.setAcceptThirdPartyCookies(webView, true);
@@ -319,20 +326,6 @@ public class MainActivity extends AppCompatActivity {
         webView.setHapticFeedbackEnabled(false);
         webView.addJavascriptInterface(new AndroidBridge(this), "AndroidBridge");
 
-        // ============================================================
-        // НАТИВНЫЙ ПЕРЕХВАТ ТАПА на элемент с data-launch-pkg.
-        //
-        // При ACTION_DOWN — запоминаем позицию, возвращаем false
-        // (WebView продолжает обработку → JS получает touchstart).
-        //
-        // При ACTION_UP — если это был короткий тап без смещения,
-        // читаем window._farTouchStart (JS-обработчик touchstart его
-        // заполняет для элемента под пальцем, см. 42-wm-startmenu.js).
-        // Если pkg присутствует — нативно вызываем AndroidBridge.launchApp.
-        //
-        // Дебаунс в AndroidBridge гарантирует, что даже если JS и native
-        // сработают одновременно — запуск произойдёт один раз.
-        // ============================================================
         webView.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
@@ -359,7 +352,6 @@ public class MainActivity extends AppCompatActivity {
                             return false;
                         }
 
-                        // Valid tap. Read JS-captured element.
                         webView.evaluateJavascript(
                                 "(function(){" +
                                         "  try {" +
@@ -481,10 +473,6 @@ public class MainActivity extends AppCompatActivity {
 
         webView.setWebChromeClient(new WebChromeClient() {
 
-            // ============================================================
-            // Перехват __LAUNCH_APP__ маркера из JS console.log
-            // (третий независимый путь запуска).
-            // ============================================================
             @Override
             public boolean onConsoleMessage(ConsoleMessage cm) {
                 String msg = cm.message();
@@ -564,7 +552,12 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        webView.setDownloadListener((url, ua, cd, mt, cl) -> {
+        // ============================================================
+        // FIX: параметр лямбды переименован с `ua` на `userAgent`,
+        // чтобы не конфликтовать с локальной переменной `ua`,
+        // объявленной выше в этом же методе.
+        // ============================================================
+        webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
             if (url == null) return;
             if (url.startsWith("blob:") || url.startsWith("data:")) {
                 Toast.makeText(MainActivity.this,
@@ -574,7 +567,8 @@ public class MainActivity extends AppCompatActivity {
             if (url.startsWith("http://") || url.startsWith("https://")) {
                 try {
                     DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
-                    String fn = android.webkit.URLUtil.guessFileName(url, cd, mt);
+                    String fn = android.webkit.URLUtil.guessFileName(
+                            url, contentDisposition, mimeType);
                     req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fn);
                     req.setNotificationVisibility(
                             DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);

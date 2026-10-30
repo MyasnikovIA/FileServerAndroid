@@ -5,6 +5,10 @@
 // Клиент работает ТОЛЬКО с FileServer (REST + SSE).
 // Все запросы идут через FAR.FsClient с Bearer-токеном.
 // PouchDB / CouchDB не поддерживаются.
+//
+// ВАЖНО: убрана логика использования прокси (buildProxyUrl),
+// так как на Android-сервере этот обработчик не реализован.
+// Подключение к внешним серверам выполняется напрямую (CORS).
 // ============================================================
 
 
@@ -44,46 +48,6 @@ FAR.clearConnFromLS = function () {
 };
 
 
-/**
- * Проверка доступности сервера. Возвращает true, если сервер ответил (любым статусом).
- * Использует mode: 'no-cors' — если сервер на другом origin, ответ opaque,
- * но главное — если запрос дошёл, значит сервер доступен.
- */
-FAR._testReachability = async function (baseUrl) {
-    try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 3000);
-        await fetch(baseUrl + '/api/info?ping=' + Date.now(), {
-            method: 'GET', mode: 'no-cors', credentials: 'omit', signal: controller.signal, cache: 'no-store'
-        });
-        clearTimeout(timer);
-        return true;
-    } catch (e) {
-        return false;
-    }
-};
-
-/**
- * Строит URL прокси через текущий origin.
- */
-FAR.buildProxyUrl = function (targetUrl) {
-    const origin = window.location.origin;
-    const b64 = FAR._base64UrlEncode(targetUrl);
-    return origin + '/api/proxy/' + b64;
-};
-
-/**
- * URL-safe Base64 от UTF-8 строки без padding.
- */
-FAR._base64UrlEncode = function (str) {
-    const bytes = new TextEncoder().encode(str);
-    let bin = '';
-    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-};
-
-
-
 FAR.ensureDb = function () {
     if (!FAR.db) {
         FAR.toast('Нет подключения к FileServer. Войдите в систему.', 'warning');
@@ -98,17 +62,7 @@ FAR.ensureDb = function () {
  *
  * @param {Object} cfg — { url, user, pass }
  * @returns {Promise<{db: FsClient, info: Object, fullUrl: string, token: string}>}
- *
- * ВАЖНО: URL в cfg может прийти БЕЗ схемы — пользователь вводит
- * "www.example.com:8080" вместо "http://www.example.com:8080".
- * Мы нормализуем его здесь и МУТИРУЕМ cfg.url, чтобы вызывающий
- * код, который после await использует cfg (applyConnectionToSide,
- * saveSideConnToLS, saveConnToLS), сохранил уже корректный URL.
- *
- * Без этого fetch() падает:
- *   "URL scheme 'www.example.com' is not supported"
  */
-
 FAR.connectToDb = async function (cfg) {
     if (typeof FAR.FsClient !== 'function') throw new Error('FsClient не загружен');
 
@@ -117,27 +71,9 @@ FAR.connectToDb = async function (cfg) {
 
     cfg.url = originalUrl;
 
+    // Подключаемся напрямую. Если удалённый сервер имеет CORS,
+    // браузер сам выполнит запросы без прокси.
     let actualUrl = originalUrl;
-    let usedProxy = false;
-
-    const currentOrigin = window.location.origin;
-    let targetOrigin = '';
-    try { targetOrigin = new URL(originalUrl).origin; } catch (e) {}
-
-    if (targetOrigin && targetOrigin !== currentOrigin) {
-        if (typeof FAR.updateLoadingSub === 'function') {
-            FAR.updateLoadingSub('Проверка доступности ' + originalUrl + '…');
-        }
-        const reachable = await FAR._testReachability(originalUrl);
-        if (!reachable) {
-            actualUrl = FAR.buildProxyUrl(originalUrl);
-            usedProxy = true;
-            console.log('[connect] Прямое подключение недоступно, используем прокси:', actualUrl);
-            if (typeof FAR.setStatus === 'function') FAR.setStatus('🔀 Подключение через прокси…');
-        }
-    }
-
-    cfg._proxy = usedProxy;
     let token = '';
 
     if (cfg.user) {
@@ -145,8 +81,16 @@ FAR.connectToDb = async function (cfg) {
         try {
             loginRes = await FAR.FsClient.login(actualUrl, cfg.user, cfg.pass || '');
         } catch (e) {
-            if (e.status === 401) { const err = new Error('Неверный логин или пароль (401)'); err.status = 401; throw err; }
-            if (e.name === 'NetworkError') { const err = new Error('Не удалось подключиться (сеть/CORS)'); err.name = 'NetworkError'; throw err; }
+            if (e.status === 401) {
+                const err = new Error('Неверный логин или пароль (401)');
+                err.status = 401;
+                throw err;
+            }
+            if (e.name === 'NetworkError' || e.name === 'TypeError' || e.message === 'Failed to fetch') {
+                const err = new Error('Не удалось подключиться (сеть/CORS). Проверьте адрес и доступность сервера.');
+                err.name = 'NetworkError';
+                throw err;
+            }
             throw e;
         }
         token = loginRes.token || '';
@@ -154,7 +98,7 @@ FAR.connectToDb = async function (cfg) {
     }
 
     const client = new FAR.FsClient(actualUrl, { user: cfg.user || '', pass: cfg.pass || '', token: token });
-    client._isProxy = usedProxy;
+    client._isProxy = false;
     client._originalUrl = originalUrl;
 
     const info = await client.info();
@@ -163,12 +107,11 @@ FAR.connectToDb = async function (cfg) {
     FAR.videoChatEnabled = !!info.videoChatEnabled;
     FAR.videoChatPort = (typeof info.videoChatPort === 'number' && info.videoChatPort > 0) ? info.videoChatPort : 8081;
 
-    // ---- Hermes Agent (профиль консоли) ----
     FAR.hermesEnabled = !!info.hermesEnabled;
     FAR.hermesTitle   = info.hermesTitle || 'Hermes Agent';
     FAR.hermesIcon    = info.hermesIcon  || '☤';
 
-    if (!usedProxy) FAR.registerServer(actualUrl);
+    FAR.registerServer(actualUrl);
 
     if (FAR.consoleEnabled && typeof FAR.WM !== 'undefined' && typeof FAR.WM.registerConsoleApp === 'function') {
         FAR.WM.registerConsoleApp();
@@ -176,11 +119,9 @@ FAR.connectToDb = async function (cfg) {
         FAR.WM.unregisterConsoleApp();
     }
 
-    // ---- Hermes: регистрация WM-приложения ----
     if (typeof FAR.WM !== 'undefined') {
         if (FAR.hermesEnabled && typeof FAR.WM.registerHermesApp === 'function') {
             try { FAR.WM.registerHermesApp(); } catch (e) { /* ignore */ }
-            // Обновить иконки рабочего стола, если WM уже активен
             if (FAR.WM.state && FAR.WM.state.active
                 && typeof FAR.WM._scheduleDesktopRender === 'function') {
                 try { FAR.WM._scheduleDesktopRender(); } catch (e) { /* ignore */ }
@@ -194,7 +135,6 @@ FAR.connectToDb = async function (cfg) {
         }
     }
 
-    // Обновить видимость кнопки «Hermes Agent» в тулбаре
     if (typeof FAR._updateHermesButton === 'function') {
         try { FAR._updateHermesButton(); } catch (e) { /* ignore */ }
     }
@@ -204,6 +144,6 @@ FAR.connectToDb = async function (cfg) {
     return {
         db: client, info: info,
         fullUrl: FAR.connLabel({ url: originalUrl, user: cfg.user || '' }),
-        token: token, proxy: usedProxy
+        token: token, proxy: false
     };
 };

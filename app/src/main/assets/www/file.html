@@ -59,7 +59,11 @@
     <button onclick="FAR.openConsole()" id="btnConsole" title="Терминал (только для разрешённых пользователей)" style="display:none;">🖥️ Консоль</button>
     <button onclick="FAR.openVideoChat()" id="btnVideoChat" title="Смотреть трансляцию" style="display:none;">📺 Трансляция</button>
     <button onclick="FAR.openBroadcaster()" id="btnBroadcast" title="Начать трансляцию с камеры" style="display:none;">🎥 Вещать</button>
+
+    <!-- Кнопка смены сервера -->
+    <button onclick="FAR.openConnModal(false)" id="btnServer" title="Сменить текущий сервер" style="background:#cba6f7;color:#1e1e2e;">🗄️ Сервер</button>
     <button onclick="FAR.onAuthButton()" class="btn-auth" id="btnAuth" title="Войти / Выйти">🔐 LogIn</button>
+
     <button onclick="FAR.WM.toggle()" id="btnWM" title="Оконный режим">🖥 Рабочий стол</button>
     <button onclick="FAR.gamepadModeCycle()"
             oncontextmenu="event.preventDefault(); FAR.openGamepadSetup();"

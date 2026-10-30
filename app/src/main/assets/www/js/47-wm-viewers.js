@@ -1,25 +1,6 @@
 // ============================================================
 // 47-wm-viewers.js — Универсальные просмотрщики для WM-режима.
 // ============================================================
-//
-// Этот файл определяет общие функции, которые используются
-// приложениями WM-режима (explorer, viewer, panorama, pdf, video,
-// browser, jsdos, nes, emulator, mp3, lbrn2, gcode и т.д.):
-//
-//   • _trackBlobUrl(win, url)         — учёт blob URL для очистки
-//   • _finalizeViewer(win)            — освобождение всех ресурсов
-//   • _installViewerNavButtons(...)   — кнопки ◀/▶ в заголовке окна
-//   • _mountFileViewer(win, props)    — универсальный просмотрщик
-//   • _mountPanoramaViewer(win, props)— 360° панорама (Pannellum)
-//   • _mountPdfViewer(win, props)     — PDF (PDFObject)
-//   • _mountVideoViewer(win, props)   — видео
-//   • _mountBrowserViewer(win, props) — встроенный браузер
-// ============================================================
-
-// ------------------------------------------------------------
-// Учёт и освобождение blob URL
-// ------------------------------------------------------------
-
 
 FAR.WM._trackBlobUrl = function (win, url) {
     if (!win || !win.props || !url) return;
@@ -27,18 +8,9 @@ FAR.WM._trackBlobUrl = function (win, url) {
     win.props._blobUrls.push(url);
 };
 
-/**
- * Освобождает все ресурсы окна-просмотрщика:
- *  • отзывает все blob URL;
- *  • останавливает JSDOS / NES / EmulatorJS (включая AudioContext);
- *  • уничтожает Pannellum-вьюер;
- *  • уничтожает API встроенного браузера.
- *  • удаляет виртуальный джойстик.
- */
 FAR.WM._finalizeViewer = function (win) {
     if (!win || !win.props) return;
 
-    // Уничтожаем виртуальный джойстик, если он есть
     if (typeof FAR.VirtualGamepad !== 'undefined') {
         if (win.bodyEl) {
             const rootNodes = win.bodyEl.querySelectorAll('[data-role="root"]');
@@ -47,75 +19,59 @@ FAR.WM._finalizeViewer = function (win) {
         }
     }
 
-    // JSDOS
     if (win.props._jsdosInstance) {
-        try { win.props._jsdosInstance.stop(); } catch (e) { /* ignore */ }
+        try { win.props._jsdosInstance.stop(); } catch (e) { }
         win.props._jsdosInstance = null;
     }
 
-    // NES
     if (win.props._nesBrowser) {
-        try { win.props._nesBrowser.destroy(); } catch (e) { /* ignore */ }
+        try { win.props._nesBrowser.destroy(); } catch (e) { }
         win.props._nesBrowser = null;
     }
 
-    // EmulatorJS (жесткая остановка аудио и WASM)
     if (win.props._emulatorInstance) {
         const emu = win.props._emulatorInstance;
         try {
-            // 1. Обязательно закрываем AudioContext, иначе звук продолжит играть
             if (emu.Module && emu.Module.AL && emu.Module.AL.currentCtx &&
                 emu.Module.AL.currentCtx.audioCtx) {
                 try { emu.Module.AL.currentCtx.audioCtx.close(); } catch (e) {}
             }
-            // 2. Останавливаем игровой цикл
             if (emu.gameManager && typeof emu.gameManager.toggleMainLoop === 'function') {
                 try { emu.gameManager.toggleMainLoop(0); } catch (e) {}
             }
             if (emu.Module && typeof emu.Module.pauseMainLoop === 'function') {
                 try { emu.Module.pauseMainLoop(); } catch (e) {}
             }
-            // 3. Вызываем встроенные методы
             if (typeof emu.pause === 'function') { try { emu.pause(true); } catch (e) {} }
             if (typeof emu.destroy === 'function') { try { emu.destroy(); } catch (e) {} }
-            // 4. Прерываем WebAssembly
             if (emu.Module && typeof emu.Module.abort === 'function') {
                 try { emu.Module.abort(); } catch (e) {}
             }
-        } catch (e) { /* ignore */ }
+        } catch (e) { }
 
-        // Очищаем глобальную ссылку только если это тот же инстанс
         if (window.EJS_emulator === emu) {
             window.EJS_emulator = null;
         }
         win.props._emulatorInstance = null;
     }
 
-    // Pannellum
     if (win.props._pannellumViewer) {
-        try { win.props._pannellumViewer.destroy(); } catch (e) { /* ignore */ }
+        try { win.props._pannellumViewer.destroy(); } catch (e) { }
         win.props._pannellumViewer = null;
     }
 
-    // Встроенный браузер
     if (win.props._browserApi) {
-        try { win.props._browserApi.destroy(); } catch (e) { /* ignore */ }
+        try { win.props._browserApi.destroy(); } catch (e) { }
         win.props._browserApi = null;
     }
 
-    // Blob URL
     if (Array.isArray(win.props._blobUrls)) {
         for (const u of win.props._blobUrls) {
-            try { URL.revokeObjectURL(u); } catch (e) { /* ignore */ }
+            try { URL.revokeObjectURL(u); } catch (e) { }
         }
         win.props._blobUrls = [];
     }
 };
-
-
-// ------------------------------------------------------------
-// Кнопки ◀ / ▶ в заголовке окна
-// ------------------------------------------------------------
 
 FAR.WM._installViewerNavButtons = function (win, item, side) {
     if (!win || !win.el) return;
@@ -124,7 +80,6 @@ FAR.WM._installViewerNavButtons = function (win, item, side) {
     const actions = titlebar.querySelector('.wm-title-actions');
     if (!actions) return;
 
-    // Удаляем старые кнопки (если были)
     actions.querySelectorAll('.wm-nav-btn').forEach(function (b) { b.remove(); });
 
     const sideCtx = FAR.side[side || FAR.activePanel];
@@ -176,11 +131,6 @@ FAR.WM._installViewerNavButtons = function (win, item, side) {
         actions.insertBefore(createNavBtn('▶', nextIdx, 'Следующий файл'), firstAction);
     }
 };
-
-
-// ------------------------------------------------------------
-// Универсальный просмотрщик файлов
-// ------------------------------------------------------------
 
 FAR.WM._mountFileViewer = async function (win, props) {
     const item = props.file;
@@ -258,10 +208,6 @@ FAR.WM._mountFileViewer = async function (win, props) {
         loadingEl.innerHTML = '<div style="padding:20px;color:#f38ba8;">Ошибка: ' + FAR.escapeHtml(e.message) + '</div>';
     }
 };
-
-// ------------------------------------------------------------
-// Панорама 360° (Pannellum)
-// ------------------------------------------------------------
 
 FAR.WM._panoNavigateHotspot = async function (win, hs, side) {
     if (!hs) return;
@@ -425,7 +371,7 @@ FAR.WM._mountPanoramaViewer = async function (win, props) {
                 try {
                     const cfg = viewer.getConfig && viewer.getConfig();
                     if (cfg && Array.isArray(cfg.hotSpots)) hotspotsCfg = cfg.hotSpots;
-                } catch (e) { /* ignore */ }
+                } catch (e) { }
 
                 divsArr.forEach(function (div, idx) {
                     if (div._farWmIntercepted) return;
@@ -471,10 +417,6 @@ FAR.WM._mountPanoramaViewer = async function (win, props) {
             '  Ошибка: ' + FAR.escapeHtml(e.message) + '</div>';
     }
 };
-
-// ------------------------------------------------------------
-// PDF (PDFObject)
-// ------------------------------------------------------------
 
 FAR.WM._mountPdfViewer = async function (win, props) {
     const item = props.file;
@@ -533,10 +475,6 @@ FAR.WM._mountPdfViewer = async function (win, props) {
             '  Ошибка: ' + FAR.escapeHtml(e.message) + '</div>';
     }
 };
-
-// ------------------------------------------------------------
-// Видео
-// ------------------------------------------------------------
 
 FAR.WM._mountVideoViewer = async function (win, props) {
     const item = props.file;
@@ -600,11 +538,6 @@ FAR.WM._mountVideoViewer = async function (win, props) {
 
     FAR.WM._installViewerNavButtons(win, item, side);
 };
-
-
-// ------------------------------------------------------------
-// Встроенный браузер
-// ------------------------------------------------------------
 
 FAR.WM._mountBrowserViewer = async function (win, props) {
     win.el.querySelector('.wm-title-text').textContent = props.title || '🌐 Браузер';
