@@ -349,7 +349,6 @@ public class MainActivity extends AppCompatActivity {
         s.setSupportZoom(false);
         s.setBuiltInZoomControls(false);
         s.setJavaScriptCanOpenWindowsAutomatically(false);
-        webView.addJavascriptInterface(new AndroidBridge(this), "AndroidBridge");
 
         CookieManager cm = CookieManager.getInstance();
         cm.setAcceptCookie(true);
@@ -358,6 +357,7 @@ public class MainActivity extends AppCompatActivity {
         webView.setBackgroundColor(0xFF1E1E2E);
         webView.setLongClickable(false);
         webView.setHapticFeedbackEnabled(false);
+        webView.addJavascriptInterface(new AndroidBridge(this), "AndroidBridge");
 
         webView.setWebViewClient(new WebViewClient() {
 
