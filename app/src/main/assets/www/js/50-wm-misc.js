@@ -1,6 +1,15 @@
 // ============================================================
 // 50-wm-misc.js — Утилиты, заглушки и перехват openFile
 // ============================================================
+//
+// FIX 2026-10-30 v5:
+//   • Подключение к удалённому рабочему столу использует нативный
+//     loginRemoteAndSetCookie, который возвращает JSON с диагностикой.
+//   • Пользователь видит, какие URL пробовали, какие ошибки получили.
+//   • Добавлена кнопка «Открыть без авторизации» — на случай, если
+//     сервер недоступен для нативного логина, но веб-клиент сам
+//     покажет свою форму входа.
+// ============================================================
 
 FAR.WM._mountConnectionUI = function (win) {
     win.bodyEl.innerHTML =
@@ -15,7 +24,8 @@ FAR.WM._mountConnectionUI = function (win) {
         '<input id="wm-rdUser" type="text" placeholder="admin" style="width:100%;margin-top:4px;padding:8px;background:#313244;border:1px solid #45475a;border-radius:5px;color:#cdd6f4;font-family:monospace;"></label>' +
         '<label style="font-size:12px;color:#a6adc8;">Пароль' +
         '<input id="wm-rdPass" type="password" placeholder="••••••••" style="width:100%;margin-top:4px;padding:8px;background:#313244;border:1px solid #45475a;border-radius:5px;color:#cdd6f4;font-family:monospace;"></label>' +
-        '<div data-role="error" style="color:#f38ba8;font-size:12px;min-height:16px;"></div>' +
+        '<div data-role="error" style="color:#f38ba8;font-size:12px;min-height:16px;white-space:pre-wrap;line-height:1.4;"></div>' +
+        '<div data-role="extra-actions" style="display:flex;flex-direction:column;gap:8px;"></div>' +
         '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">' +
         '<button data-role="cancel" style="padding:8px 18px;background:#585b70;color:#cdd6f4;border:none;border-radius:5px;cursor:pointer;">Отмена</button>' +
         '<button data-role="connect" style="padding:8px 18px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:5px;cursor:pointer;font-weight:bold;">Подключиться</button>' +
@@ -25,56 +35,123 @@ FAR.WM._mountConnectionUI = function (win) {
     const userEl = win.bodyEl.querySelector('#wm-rdUser');
     const passEl = win.bodyEl.querySelector('#wm-rdPass');
     const errEl = win.bodyEl.querySelector('[data-role="error"]');
+    const extraEl = win.bodyEl.querySelector('[data-role="extra-actions"]');
     const cancelBtn = win.bodyEl.querySelector('[data-role="cancel"]');
     const connectBtn = win.bodyEl.querySelector('[data-role="connect"]');
 
-    // Предзаполняем поля из последних сохранённых настроек
-    const def = FAR.getConnDefaultsForSide ? FAR.getConnDefaultsForSide(null) : FAR.getDefaultConn();
+    // Загружаем последние значения
+    let def = { url: '', user: '', pass: '' };
+    try {
+        const saved = localStorage.getItem('filebd_rd_conn');
+        if (saved) def = JSON.parse(saved);
+    } catch (e) {}
+
     urlEl.value = def.url || '';
     userEl.value = def.user || '';
-    // passEl.value = def.pass || '';
+    passEl.value = def.pass || '';
 
     cancelBtn.onclick = function () { FAR.WM.closeWindow(win.id); };
 
-    connectBtn.onclick = async function () {
-        const cfg = { url: urlEl.value.trim(), user: userEl.value.trim(), pass: passEl.value };
-        if (!cfg.url) { errEl.textContent = 'Укажите URL FileServer'; return; }
+    function openBrowser(openUrl, titleUser) {
+        FAR.WM.closeWindow(win.id, true);
+        FAR.WM.openApp('browser', {
+            title: '🖥️ ' + (titleUser ? titleUser + '@' : '') +
+                   openUrl.replace(/^https?:\/\//, '').replace(/\/+$/, ''),
+            width: Math.min(window.innerWidth - 80, 1280),
+            height: Math.min(window.innerHeight - 100, 800),
+            props: { url: openUrl, trusted: true }
+        });
+    }
+
+    function showSkipButton(originalUrl) {
+        extraEl.innerHTML = '';
+        const btn = document.createElement('button');
+        btn.textContent = '🌐 Открыть без авторизации';
+        btn.style.cssText = 'padding:8px 18px;background:#f9e2af;color:#1e1e2e;border:none;border-radius:5px;cursor:pointer;font-weight:bold;';
+        btn.onclick = function () {
+            let finalUrl = originalUrl.replace(/\/+$/, '');
+            if (!/^https?:\/\//i.test(finalUrl)) finalUrl = 'http://' + finalUrl;
+            openBrowser(finalUrl + '/', userEl.value.trim());
+        };
+        const hint = document.createElement('div');
+        hint.style.cssText = 'font-size:11px;color:#a6adc8;line-height:1.4;';
+        hint.textContent = 'Если сервер отвечает, но не принимает нативный логин, ' +
+            'веб-клиент FileServer покажет свою форму входа.';
+        extraEl.appendChild(btn);
+        extraEl.appendChild(hint);
+    }
+
+    connectBtn.onclick = function () {
+        let cfgUrl = urlEl.value.trim();
+        const cfgUser = userEl.value.trim();
+        const cfgPass = passEl.value;
+
+        if (!cfgUrl) { errEl.textContent = 'Укажите URL FileServer'; return; }
+        if (!/^https?:\/\//i.test(cfgUrl)) cfgUrl = 'http://' + cfgUrl;
+        cfgUrl = cfgUrl.replace(/\/+$/, '');
+
+        try {
+            localStorage.setItem('filebd_rd_conn', JSON.stringify({
+                url: cfgUrl, user: cfgUser, pass: cfgPass
+            }));
+        } catch (e) {}
 
         connectBtn.disabled = true;
         connectBtn.textContent = 'Подключение…';
         errEl.textContent = '';
+        extraEl.innerHTML = '';
 
-        try {
-            // 1. Авторизация (проверка логина/пароля и получение токена)
-            const res = await FAR.connectToDb(cfg);
+        let authOk = false;
+        let finalUrl = cfgUrl;
+        let diagnostics = '';
 
-            // 2. Закрываем окно подключения
-            FAR.WM.closeWindow(win.id, true);
+        // --- Попытка нативного логина ---
+        if (window.AndroidBridge &&
+            typeof window.AndroidBridge.loginRemoteAndSetCookie === 'function') {
+            try {
+                const raw = window.AndroidBridge.loginRemoteAndSetCookie(
+                    cfgUrl, cfgUser, cfgPass);
+                let res = null;
+                try { res = JSON.parse(raw || '{}'); } catch (e) { res = null; }
 
-            // 3. Открываем удалённый рабочий стол
-            const targetUrl = cfg.url; // Нормализованный URL
-            let fullUrl = targetUrl;
-
-            // Добавляем токен в URL, чтобы удалённый веб-клиент авторизовался автоматически
-            if (res.token) {
-                fullUrl += (fullUrl.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(res.token);
-            }
-
-            FAR.WM.openApp('browser', {
-                title: '🖥️ ' + (cfg.user ? cfg.user + '@' : '') + targetUrl.replace(/^https?:\/\//, ''),
-                width: Math.min(window.innerWidth - 80, 1280),
-                height: Math.min(window.innerHeight - 100, 800),
-                props: {
-                    url: fullUrl,
-                    trusted: true // Разрешаем скрипты, так как это доверенный FileServer
+                if (res && res.ok) {
+                    authOk = true;
+                    if (res.url) finalUrl = res.url;
+                    console.log('[RemoteDesktop] native auth OK:', res.url,
+                                'scheme=' + res.scheme, 'port=' + res.port);
+                } else {
+                    // Собираем диагностику
+                    const tried = (res && res.tried) || [];
+                    const lines = tried.map(function (t) {
+                        const u = String(t.url || '').replace('/api/login', '');
+                        const err = t.error || 'unknown';
+                        const msg = t.message ? ' — ' + t.message : '';
+                        return '• ' + u + '\n  ' + err + msg;
+                    });
+                    diagnostics = lines.length
+                        ? lines.join('\n')
+                        : ('Ошибка: ' + ((res && (res.error || res.message)) || 'unknown'));
+                    console.warn('[RemoteDesktop] native auth failed:\n' + diagnostics);
                 }
-            });
-
-        } catch (e) {
-            errEl.textContent = '❌ ' + (e.message || String(e));
-            connectBtn.disabled = false;
-            connectBtn.textContent = 'Подключиться';
+            } catch (e) {
+                console.error('[RemoteDesktop] native auth exception:', e);
+                diagnostics = 'Исключение: ' + (e.message || String(e));
+            }
+        } else {
+            console.warn('[RemoteDesktop] AndroidBridge unavailable');
+            diagnostics = 'AndroidBridge недоступен (запуск не в APK?)';
         }
+
+        if (authOk) {
+            openBrowser(finalUrl + '/', cfgUser);
+            return;
+        }
+
+        // --- Провал: показываем ошибку + кнопку "Открыть без авторизации" ---
+        errEl.textContent = '⚠️ Авторизация не удалась.\n\n' + diagnostics;
+        connectBtn.disabled = false;
+        connectBtn.textContent = 'Повторить';
+        showSkipButton(cfgUrl);
     };
 };
 
