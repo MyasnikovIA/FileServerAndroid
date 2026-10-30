@@ -205,8 +205,13 @@ FAR._virtualRender = function (side, listEl, hasParent, items, cursor, selSet) {
 FAR.setActivePanel = function (side) {
     if (FAR.activePanel === side) return;
     FAR.activePanel = side;
-    document.getElementById('panelLeft').classList.toggle('active', side === 'left');
-    document.getElementById('panelRight').classList.toggle('active', side === 'right');
+
+    // В WM-режиме #panelLeft / #panelRight в DOM отсутствуют.
+    const pl = document.getElementById('panelLeft');
+    const pr = document.getElementById('panelRight');
+    if (pl) pl.classList.toggle('active', side === 'left');
+    if (pr) pr.classList.toggle('active', side === 'right');
+
     FAR.renderPanel('left');
     FAR.renderPanel('right');
     FAR.updateSelectionInfo();
@@ -351,14 +356,21 @@ FAR.getSelectedItemsFromActivePanel = function () {
 };
 
 FAR.updateButtons = function () {
-    const hasDb = !!FAR.db;
-    const ctx = FAR.side[FAR.activePanel];
+    const hasDb   = !!FAR.db;
+    const ctx     = FAR.side[FAR.activePanel];
     const selCount = ctx ? ctx.selectedIdx.size : 0;
-    document.getElementById('btnCopy').disabled     = !hasDb || selCount === 0;
-    document.getElementById('btnMove').disabled     = !hasDb || selCount === 0;
-    document.getElementById('btnDelete').disabled   = !hasDb || selCount === 0;
-    document.getElementById('btnDownload').disabled = !hasDb || selCount === 0;
-    document.getElementById('btnZip').disabled      = !hasDb || selCount === 0;
+    const disabled = (!hasDb || selCount === 0);
+
+    // В WM-режиме кнопок тулбара нет — просто молча пропускаем.
+    const setDisabled = function (id, v) {
+        const el = document.getElementById(id);
+        if (el) el.disabled = !!v;
+    };
+    setDisabled('btnCopy',     disabled);
+    setDisabled('btnMove',     disabled);
+    setDisabled('btnDelete',   disabled);
+    setDisabled('btnDownload', disabled);
+    setDisabled('btnZip',      disabled);
 };
 
 // ============================================================

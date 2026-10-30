@@ -411,9 +411,10 @@ FAR.WM.exit = function () {
 };
 
 FAR.WM.logout = function () {
-    FAR.WM.closeStartMenu();
+    // Всю логику (confirm, WM.exit, очистка, показ модалки) делает
+    // FAR.onAuthButton. Здесь только пробрасываем вызов, чтобы не
+    // было двойного WM.exit и двойного confirm.
     if (typeof FAR.onAuthButton === 'function') {
-        FAR.WM.exit();
         FAR.onAuthButton();
     }
 };

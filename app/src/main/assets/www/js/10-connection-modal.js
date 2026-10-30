@@ -1,5 +1,5 @@
 // ============================================================
-// Модалка подключения к FileServer (глобально или для панели).
+// Модалка подключения к FileServer.
 // ============================================================
 
 FAR.connModalSide = null;
@@ -9,35 +9,34 @@ FAR.openConnModal = function (required, side) {
     FAR.connModalSide = side || null;
 
     const modal = document.getElementById('connModal');
-    const def = FAR.getConnDefaultsForSide(FAR.connModalSide);
-
-    document.getElementById('connUrl').value  = def.url  || '';
-    document.getElementById('connUser').value = def.user || '';
-    document.getElementById('connPass').value = def.pass || '';
-    document.getElementById('connError').textContent = '';
-    document.getElementById('connConnectBtn').disabled = false;
-    document.getElementById('connConnectBtn').textContent = 'Подключиться';
-    document.getElementById('connCloseBtn').style.display  = required ? 'none' : '';
-    document.getElementById('connCancelBtn').style.display = required ? 'none' : '';
-
-    // Режим работы — только для глобального подключения
-    const modeRow = document.getElementById('connUiModeRow');
-    const modeSel = document.getElementById('connUiMode');
-    if (modeRow && modeSel) {
-        if (FAR.connModalSide) {
-            modeRow.style.display = 'none';
-        } else {
-            modeRow.style.display = '';
-            let saved = 'panel';
-            if (typeof FAR.WM !== 'undefined' && typeof FAR.WM.getSavedMode === 'function') {
-                saved = FAR.WM.getSavedMode();
-            }
-            modeSel.value = saved;
-        }
+    if (!modal) {
+        console.error('[openConnModal] #connModal не вставлен в DOM');
+        return;
     }
 
-    const titleEl = document.getElementById('connTitle');
-    const tgtEl = document.getElementById('connTarget');
+    const def = FAR.getConnDefaultsForSide(FAR.connModalSide);
+
+    const urlEl  = document.getElementById('connUrl');
+    const userEl = document.getElementById('connUser');
+    const passEl = document.getElementById('connPass');
+    const errEl  = document.getElementById('connError');
+    const connectBtn = document.getElementById('connConnectBtn');
+    const closeBtn   = document.getElementById('connCloseBtn');
+    const cancelBtn  = document.getElementById('connCancelBtn');
+
+    if (urlEl)  urlEl.value  = def.url  || '';
+    if (userEl) userEl.value = def.user || '';
+    if (passEl) passEl.value = def.pass || '';
+    if (errEl)  errEl.textContent = '';
+    if (connectBtn) {
+        connectBtn.disabled = false;
+        connectBtn.textContent = 'Подключиться';
+    }
+    if (closeBtn)  closeBtn.style.display  = required ? 'none' : '';
+    if (cancelBtn) cancelBtn.style.display = required ? 'none' : '';
+
+    const titleEl   = document.getElementById('connTitle');
+    const tgtEl     = document.getElementById('connTarget');
     const tgtNameEl = document.getElementById('connTargetName');
     if (FAR.connModalSide) {
         if (titleEl) titleEl.textContent = '🔐 Подключение панели';
@@ -50,34 +49,33 @@ FAR.openConnModal = function (required, side) {
     }
 
     modal.classList.remove('hidden');
-    setTimeout(function () { document.getElementById('connUrl').focus(); }, 50);
+    setTimeout(function () { if (urlEl) urlEl.focus(); }, 50);
 };
 
 FAR.closeConnModal = function () {
     if (FAR.connModalRequired) return;
-    document.getElementById('connModal').classList.add('hidden');
+    const modal = document.getElementById('connModal');
+    if (modal) modal.classList.add('hidden');
 };
 
 FAR.submitConnModal = async function () {
-    const url  = document.getElementById('connUrl').value.trim();
-    const user = document.getElementById('connUser').value.trim();
-    const pass = document.getElementById('connPass').value;
-
-    let uiMode = 'panel';
-    if (!FAR.connModalSide) {
-        const modeSel = document.getElementById('connUiMode');
-        if (modeSel) uiMode = modeSel.value || 'panel';
-    }
+    const urlEl = document.getElementById('connUrl');
+    if (!urlEl) return;
+    const url  = urlEl.value.trim();
+    const user = (document.getElementById('connUser') || {}).value || '';
+    const pass = (document.getElementById('connPass') || {}).value || '';
 
     const errEl = document.getElementById('connError');
-    errEl.textContent = '';
+    if (errEl) errEl.textContent = '';
 
-    if (!url) { errEl.textContent = 'Укажите адрес FileServer'; return; }
+    if (!url) {
+        if (errEl) errEl.textContent = 'Укажите адрес FileServer';
+        return;
+    }
 
-    const cfg = { url: url, user: user, pass: pass };
+    const cfg = { url: url, user: user.trim(), pass: pass };
     const btn = document.getElementById('connConnectBtn');
-    btn.disabled = true;
-    btn.textContent = 'Подключение…';
+    if (btn) { btn.disabled = true; btn.textContent = 'Подключение…'; }
 
     try {
         const res = await FAR.connectToDb(cfg);
@@ -92,38 +90,52 @@ FAR.submitConnModal = async function () {
 
         FAR.updateAuthUI();
         FAR.connModalRequired = false;
-        document.getElementById('connModal').classList.add('hidden');
 
-        FAR.setStatus('✅ Подключено: ' + res.fullUrl);
+        // Скрываем модалку ДО WM.enter(), чтобы _closeAllModals не
+        // делал лишних телодвижений.
+        const modalEl = document.getElementById('connModal');
+        if (modalEl) modalEl.classList.add('hidden');
+
         FAR.toast('Подключение установлено', 'success');
 
         if (FAR.connModalSide) {
             await FAR.loadFilesForSide(FAR.connModalSide, { path: '/', silent: true });
-            FAR.renderPanel(FAR.connModalSide, { skipLoad: true });
         } else {
             await FAR.loadFilesForSide('left',  { path: '/', silent: true });
             await FAR.loadFilesForSide('right', { path: '/', silent: true });
-            FAR.renderPanel('left',  { skipLoad: true });
-            FAR.renderPanel('right', { skipLoad: true });
         }
-        FAR.updateConnIndicators();
 
-        if (!FAR.connModalSide && typeof FAR.WM !== 'undefined') {
-            if (typeof FAR.WM.saveMode === 'function') FAR.WM.saveMode(uiMode);
-            if (uiMode === 'wm') {
-                if (!FAR.WM.state.active) FAR.WM.enter();
-            } else {
-                if (FAR.WM.state.active) FAR.WM.exit();
+        // ── ВХОДИМ В WM (если ещё не вошли) ──
+        if (typeof FAR.WM !== 'undefined' && !FAR.WM.state.active) {
+            try {
+                FAR.WM.enter();
+            } catch (e) {
+                console.warn('[WM] enter after connect failed:', e);
             }
         }
+
+        // Обновляем explorer-окна в WM
+        if (FAR.WM && FAR.WM.state && FAR.WM.state.windows) {
+            FAR.WM.state.windows.forEach(function (w) {
+                if (w.appId === 'explorer' && w.props && w.props.side) {
+                    try { FAR.renderPanel(w.props.side, { skipLoad: true }); } catch (e) {}
+                }
+            });
+        }
+
+        if (typeof FAR.updateConnIndicators === 'function') {
+            FAR.updateConnIndicators();
+        }
+
     } catch (e) {
         console.error('connect error:', e);
         let msg = e && e.message ? e.message : String(e);
         if (e && e.status === 401) msg = 'Неверный логин или пароль (401)';
         if (e && e.status === 404) msg = 'Не найдено (404). Проверьте адрес.';
-        if (e && e.name === 'NetworkError' || msg === 'Failed to fetch') msg = 'Не удалось подключиться (сеть/CORS). Проверьте доступность сервера.';
-        errEl.textContent = '❌ ' + msg;
-        btn.disabled = false;
-        btn.textContent = 'Подключиться';
+        if (e && e.name === 'NetworkError' || msg === 'Failed to fetch') {
+            msg = 'Не удалось подключиться (сеть/CORS). Проверьте доступность сервера.';
+        }
+        if (errEl) errEl.textContent = '❌ ' + msg;
+        if (btn) { btn.disabled = false; btn.textContent = 'Подключиться'; }
     }
 };

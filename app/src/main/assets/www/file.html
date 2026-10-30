@@ -3,15 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-    <title>FAR-менеджер — FileServer</title>
+    <title>FileServer — Рабочий стол</title>
 
     <script src="lib/jszip/jszip.min.js"></script>
 
     <link rel="stylesheet" href="css/base.css">
-    <link rel="stylesheet" href="css/toolbar.css">
     <link rel="stylesheet" href="css/panels.css">
     <link rel="stylesheet" href="css/context-menu.css">
-    <link rel="stylesheet" href="css/status.css">
     <link rel="stylesheet" href="css/modal.css">
     <link rel="stylesheet" href="css/progress.css">
     <link rel="stylesheet" href="css/loading.css">
@@ -34,7 +32,6 @@
     <link rel="stylesheet" href="css/video-viewer.css">
     <link rel="stylesheet" href="css/videochat-viewer.css">
     <link rel="stylesheet" href="css/videochat-broadcaster.css">
-    <link rel="stylesheet" href="css/ollama.css">
     <link rel="stylesheet" href="css/lbrn2-viewer.css">
     <link rel="stylesheet" href="css/gcode-viewer.css">
     <link rel="stylesheet" href="css/wm.css">
@@ -42,79 +39,7 @@
 </head>
 <body>
 
-<div class="toolbar">
-    <button onclick="FAR.uploadFile()" id="btnUpload" disabled>📤 Загрузить</button>
-    <button onclick="FAR.createFolder()" id="btnMkdir" disabled>📁 Создать папку</button>
-    <button onclick="FAR.copySelected()" class="btn-success" id="btnCopy" disabled>📋 → Копировать</button>
-    <button onclick="FAR.moveSelected()" class="btn-move" id="btnMove" disabled>✂️ → Перенести</button>
-    <button onclick="FAR.downloadSelectedUncompressed()" class="btn-download" id="btnDownload" disabled>📥 → Скачать</button>
-    <button onclick="FAR.downloadSelectedAsZip()" class="btn-zip" id="btnZip" disabled>🗜️ → Скачать ZIP</button>
-    <button onclick="FAR.deleteSelected()" class="btn-danger" id="btnDelete" disabled>🗑️ Удалить</button>
-    <button onclick="FAR.refreshFiles()" class="btn-warning" id="btnRefresh" disabled>🔄 Обновить</button>
-    <button onclick="FAR.showDebug()" id="btnDebug" title="Показать структуру" disabled>🔍 Debug</button>
-    <button onclick="FAR.openGamepadSetup()" id="btnGamepad" title="Настроить джойстик">🎮 Джойстик</button>
-    <button onclick="FAR.openOllama()" id="btnOllama" title="Ollama Chat (локальная LLM)">🦙 Ollama</button>
-    <button onclick="FAR.openConsole()" id="btnConsole" title="Терминал (только для разрешённых пользователей)" style="display:none;">🖥️ Консоль</button>
-    <button onclick="FAR.openVideoChat()" id="btnVideoChat" title="Смотреть трансляцию" style="display:none;">📺 Трансляция</button>
-    <button onclick="FAR.openBroadcaster()" id="btnBroadcast" title="Начать трансляцию с камеры" style="display:none;">🎥 Вещать</button>
-
-    <button onclick="FAR.openConnModal(false)" id="btnServer" title="Сменить текущий сервер" style="background:#cba6f7;color:#1e1e2e;">🗄️ Сервер</button>
-    <button onclick="FAR.onAuthButton()" class="btn-auth" id="btnAuth" title="Войти / Выйти">🔐 LogIn</button>
-
-    <!-- КНОПКА СМЕНЫ ПАРОЛЯ -->
-    <button onclick="FAR.openChangePassword()" id="btnPass" title="Сменить пароль" style="background:#f38ba8;color:#1e1e2e;">🔐 Пароль</button>
-
-    <button onclick="FAR.WM.toggle()" id="btnWM" title="Оконный режим">🖥 Рабочий стол</button>
-    <button onclick="FAR.gamepadModeCycle()"
-            oncontextmenu="event.preventDefault(); FAR.openGamepadSetup();"
-            class="gp-mode-indicator gp-mode-files"
-            id="gpModeIndicator"
-            title="ЛКМ — переключить режим, ПКМ — настройка">🎮 Файлы</button>
-    <span style="color:#a6adc8;font-size:12px;margin-left:auto;" id="statusText">Инициализация…</span>
-</div>
-
-<div class="panels">
-    <div class="panel active" id="panelLeft" onclick="FAR.setActivePanel('left')">
-        <div class="panel-header">
-            <span class="path" id="pathLeft">/</span>
-            <div class="nav-buttons">
-                <button onclick="event.stopPropagation(); FAR.openConnModal(false, 'left')" title="Сменить сервер для левой панели">🗄️</button>
-                <button onclick="event.stopPropagation(); FAR.navigatePanel('left', '..')">⬆</button>
-                <button onclick="event.stopPropagation(); FAR.navigatePanel('left', '/')">🏠</button>
-            </div>
-        </div>
-        <div class="file-list" id="listLeft"></div>
-        <div class="drop-hint" id="dropHintLeft">
-            <div class="drop-icon">📥</div>
-            <div>Отпустите, чтобы загрузить</div>
-            <div class="drop-path" id="dropPathLeft">/</div>
-        </div>
-    </div>
-    <div class="panel" id="panelRight" onclick="FAR.setActivePanel('right')">
-        <div class="panel-header">
-            <span class="path" id="pathRight">/</span>
-            <div class="nav-buttons">
-                <button onclick="event.stopPropagation(); FAR.openConnModal(false, 'right')" title="Сменить сервер для правой панели">🗄️</button>
-                <button onclick="event.stopPropagation(); FAR.navigatePanel('right', '..')">⬆</button>
-                <button onclick="event.stopPropagation(); FAR.navigatePanel('right', '/')">🏠</button>
-            </div>
-        </div>
-        <div class="file-list" id="listRight"></div>
-        <div class="drop-hint" id="dropHintRight">
-            <div class="drop-icon">📥</div>
-            <div>Отпустите, чтобы загрузить</div>
-            <div class="drop-path" id="dropPathRight">/</div>
-        </div>
-    </div>
-</div>
-
-<div class="status-bar">
-    <span id="statusLeft">Левая: 0</span>
-    <span id="statusRight">Правая: 0</span>
-    <span class="total-size" id="totalSize">💾 Всего: 0 B • файлов: 0 • папок: 0</span>
-    <span class="sel-info" id="selInfo"></span>
-</div>
-
+<!-- Единственный корневой контейнер для модалок (connection, progress, loading, desktop) -->
 <div id="modalRoot"></div>
 <div class="toast-container" id="toastContainer"></div>
 
@@ -191,7 +116,6 @@
 <script src="js/53-videochat-broadcaster.js"></script>
 <script src="js/54-wm-panorama-editor.js"></script>
 <script src="js/55-wm-text-editor.js"></script>
-<script src="js/57-ollama.js"></script>
 <script src="js/58-lbrn2-viewer.js"></script>
 <script src="js/59-gcode-viewer.js"></script>
 <script src="js/60-virtual-gamepad.js"></script>

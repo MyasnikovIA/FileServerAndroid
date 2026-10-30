@@ -1,8 +1,9 @@
 // ============================================================
-// Точка входа: загрузка модалок, инициализация, автоподключение
+// Точка входа: WM-режим, автоподключение.
+// WM активируется ТОЛЬКО после успешного подключения.
 // ============================================================
 
-FAR.loadModalFragment = function(path) {
+FAR.loadModalFragment = function (path) {
     try {
         const xhr = new XMLHttpRequest();
         xhr.open('GET', path, false);
@@ -17,33 +18,17 @@ FAR.loadModalFragment = function(path) {
     }
 };
 
-FAR.injectModals = function() {
+FAR.injectModals = function () {
     const root = document.getElementById('modalRoot');
+    if (!root) {
+        console.error('[injectModals] #modalRoot не найден в DOM');
+        return;
+    }
     const files = [
         'modals/connection.html',
-        'modals/viewer.html',
-        'modals/panorama-viewer.html',
-        'modals/panorama-editor.html',
-        'modals/db-picker.html',
-        'modals/mp3-viewer.html',
-        'modals/video-viewer.html',
-        'modals/jsdos-viewer.html',
-        'modals/console.html',
-        'modals/videochat-viewer.html',
-        'modals/videochat-broadcaster.html',
-        'modals/emulator-viewer.html',
-        'modals/pdf-viewer.html',
-        'modals/lbrn2-viewer.html',
-        'modals/gcode-viewer.html',
-        'modals/browser.html',
-        'modals/gamepad-setup.html',
-        'modals/ollama.html',
         'modals/progress.html',
         'modals/loading.html',
-        'modals/debug.html',
-        'modals/desktop.html',
-        'modals/wm-file-dialog.html',
-        'modals/change-password.html'
+        'modals/desktop.html'
     ];
     let html = '';
     for (const f of files) {
@@ -55,42 +40,14 @@ FAR.injectModals = function() {
 // ============================================================
 // Старт
 // ============================================================
-document.addEventListener('DOMContentLoaded', async function() {
+document.addEventListener('DOMContentLoaded', async function () {
     FAR.injectModals();
 
-    if (typeof FAR.setupPanelDbSwitcher === 'function') {
-        FAR.setupPanelDbSwitcher();
-    }
-    if (typeof FAR.updateConnIndicators === 'function') {
-        FAR.updateConnIndicators();
-    }
-
     FAR.updateAuthUI();
-    FAR.renderPanel('left');
-    FAR.renderPanel('right');
-
-    FAR.setupPanelDragDrop('panelLeft');
-    FAR.setupPanelDragDrop('panelRight');
-
-    window.addEventListener('dragover', function(e) { e.preventDefault(); });
-    window.addEventListener('drop',     function(e) { e.preventDefault(); });
-
     FAR.setupKeyboard();
-    FAR.setupGamepadAuto();
-    FAR.setupPanelContextMenu();
 
-    if (typeof FAR.initBrowser === 'function') {
-        FAR.initBrowser();
-    }
+    if (typeof FAR.initBrowser === 'function') FAR.initBrowser();
     if (typeof FAR.initConsole === 'function') FAR.initConsole();
-
-    if (typeof FAR.WM !== 'undefined') {
-        setTimeout(function () {
-            if (typeof FAR.WM.updateTray === 'function') {
-                FAR.WM.updateTray();
-            }
-        }, 500);
-    }
 
     FAR._installPannellumDbWrapper();
 
@@ -98,16 +55,11 @@ document.addEventListener('DOMContentLoaded', async function() {
         FAR.restoreAuthTokenFromCookie();
     }
 
-    // ============================================================
-    // ЗАПУСК АВТОЗАПУСКА
-    // ============================================================
     if (typeof FAR.Autostart !== 'undefined') {
-        setTimeout(() => {
-            FAR.Autostart.run();
-        }, 1500);
+        setTimeout(() => { FAR.Autostart.run(); }, 1500);
     }
 
-    // Далее логика подключения...
+    // ── Автоподключение ──
     const savedGlobal = FAR.loadConnFromLS();
     const savedLeft   = (typeof FAR.loadSideConnFromLS === 'function')
         ? FAR.loadSideConnFromLS('left')  : null;
@@ -116,54 +68,37 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     let saved = savedGlobal || savedLeft || savedRight;
 
-    // ИСПРАВЛЕНИЕ: Если сохранен 127.0.0.1, но мы зашли с другого IP,
-    // заменяем адрес на текущий origin (чтобы не было зависания).
     if (saved && saved.url) {
-        if (saved.url.includes('127.0.0.1') && location.hostname !== '127.0.0.1' && location.hostname !== 'localhost') {
+        if (saved.url.includes('127.0.0.1') &&
+            location.hostname !== '127.0.0.1' &&
+            location.hostname !== 'localhost') {
             console.log('[AutoConnect] Replacing 127.0.0.1 with current origin:', location.origin);
             saved.url = location.origin;
         }
     }
 
     if (saved) {
-        FAR.setStatus('🔌 Подключение с сохранёнными данными…');
         FAR.showLoading('Подключение к FileServer…', saved.url);
         try {
-            // Добавляем таймаут на подключение, чтобы не зависать навсегда
             const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Таймаут подключения к серверу (10 сек)')), 10000)
             );
             const res = await Promise.race([FAR.connectToDb(saved), timeoutPromise]);
 
             FAR.applyConnectionToBoth(saved, res.db, res.fullUrl);
-
             FAR.hideLoading();
             FAR.updateAuthUI();
-            FAR.setStatus(`✅ Подключено: ${res.fullUrl}`);
             FAR.toast('Подключение восстановлено', 'success');
 
             await FAR.loadFilesForSide('left',  { path: '/', silent: true });
             await FAR.loadFilesForSide('right', { path: '/', silent: true });
 
-            FAR.renderPanel('left',  { skipLoad: true });
-            FAR.renderPanel('right', { skipLoad: true });
-
-            FAR.restoreUiState();
-
-            if (typeof FAR.updateConnIndicators === 'function') {
-                FAR.updateConnIndicators();
-            }
-
-            if (typeof FAR.WM !== 'undefined' && typeof FAR.WM.getSavedMode === 'function') {
-                const savedMode = FAR.WM.getSavedMode();
-                if (savedMode === 'wm' && !FAR.WM.state.active) {
-                    setTimeout(function () {
-                        try {
-                            FAR.WM.enter();
-                        } catch (e) {
-                            console.warn('[WM] restore mode failed:', e);
-                        }
-                    }, 200);
+            // ── ВХОДИМ В WM только после успешного подключения ──
+            if (typeof FAR.WM !== 'undefined') {
+                try {
+                    FAR.WM.enter();
+                } catch (e) {
+                    console.warn('[WM] enter on startup failed:', e);
                 }
             }
         } catch (e) {
@@ -175,12 +110,12 @@ document.addEventListener('DOMContentLoaded', async function() {
             FAR.currentConn = null;
 
             FAR.updateAuthUI();
-            FAR.setStatus('❌ Ошибка автоподключения: ' + e.message);
             FAR.toast('Не удалось подключиться: ' + e.message, 'error');
             FAR.openConnModal(true);
+            // WM не активируем — пусть пользователь видит модалку логина
         }
     } else {
-        FAR.setStatus('🔐 Требуется вход');
+        // Нет сохранённого соединения — только модалка логина, WM скрыт
         FAR.openConnModal(true);
     }
 });
