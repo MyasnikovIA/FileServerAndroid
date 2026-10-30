@@ -1,20 +1,8 @@
 // ============================================================
 // 42-wm-startmenu.js — меню Пуск с категориями и подменю
 // ============================================================
-//
-// FIX 2026-10-30 v3:
-//   1. Каждому .wm-start-item навешивается атрибут data-launch-pkg
-//      (для Android-приложений) — его читает нативный ACTION_UP.
-//   2. Установлен глобальный touchstart/touchend listener, который
-//      НЕ зависит от click-события (click может не сработать, если
-//      меню закрывается раньше — элемент исчезает через display:none).
-//   3. При клике также пишется console.log('__LAUNCH_APP__|pkg|act'),
-//      который ловит MainActivity.onConsoleMessage — третий backup.
-//
-// Дебаунс в AndroidBridge.launchApp гарантирует единственный запуск.
-// ============================================================
 
-console.log('[StartMenu] VERSION 2026-10-30 v3 — touch launcher installed');
+console.log('[StartMenu] VERSION 2026-10-30 v5 — remote desktop');
 
 FAR.WM.toggleStartMenu = function () {
     const sm = document.getElementById('wmStartMenu');
@@ -64,7 +52,7 @@ FAR.WM.APP_CATEGORY_MAP = {
     jsdos: 'games', nes: 'games', emulator: 'games',
     ollama: 'ai',
     videochat: 'stream', broadcaster: 'stream',
-    connect: 'system', gamepad: 'system', gpu: 'system',
+    connect: 'system', gamepad: 'system',
     debug: 'system', log: 'system', console: 'system',
     settings: 'system', 'default-launcher': 'system'
 };
@@ -190,10 +178,6 @@ FAR.WM._showStartSubmenu = function (rowEl, categoryId, categoryIcon,
         item.className = 'wm-start-item';
         item.setAttribute('data-app-id', app.id);
 
-        // ============================================================
-        // Ключевые атрибуты для нативного перехвата ACTION_UP.
-        // Без них нативный обработчик не узнает, что запускать.
-        // ============================================================
         if (app.androidPkg) {
             item.setAttribute('data-launch-pkg', app.androidPkg);
             item.setAttribute('data-launch-activity', app.androidActivity || '');
@@ -208,11 +192,8 @@ FAR.WM._showStartSubmenu = function (rowEl, categoryId, categoryIcon,
             e.preventDefault();
             e.stopPropagation();
 
-            // ПЕРВОЕ — запускаем (даже если прячем меню).
-            // ВТОРОЕ — скрываем.
             try {
                 if (app.androidPkg) {
-                    // Третий независимый путь: native onConsoleMessage.
                     try {
                         console.log('__LAUNCH_APP__|' + app.androidPkg + '|' +
                             (app.androidActivity || ''));
@@ -466,7 +447,6 @@ FAR.WM.logout = function () {
         console.log('[StartMenu] JS tap launch: '
             + (s.pkg || s.appId));
 
-        // 1) Прямой вызов нативного метода — самый надёжный путь.
         if (s.pkg && window.AndroidBridge &&
             typeof window.AndroidBridge.launchApp === 'function') {
             try { window.AndroidBridge.launchApp(s.pkg, s.act); }
@@ -478,15 +458,11 @@ FAR.WM.logout = function () {
             } catch (err) { console.error('[StartMenu] invokeApp:', err); }
         }
 
-        // 2) Скрываем меню — после запуска.
         try {
             if (window.FAR && FAR.WM) {
                 FAR.WM._hideStartSubmenu();
                 FAR.WM.closeStartMenu();
             }
         } catch (err) {}
-
-        // Не обнуляем window._farTouchStart — пусть native ACTION_UP
-        // тоже увидит его (дебаунс предотвратит двойной запуск).
     }, { capture: true, passive: true });
 })();

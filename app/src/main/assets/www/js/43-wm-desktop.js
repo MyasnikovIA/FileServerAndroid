@@ -1,6 +1,9 @@
 // ============================================================
 // 43-wm-desktop.js — рабочий стол: иконки, drag, контекстное меню
 // ============================================================
+//
+// FIX 2026-10-30 v4: удалено приложение "Загрузка GPU".
+// ============================================================
 
 FAR.WM.LS_ICONS_KEY = 'filebd_wm_desktop_icons';
 
@@ -14,7 +17,6 @@ FAR.WM.DESKTOP_DEFAULT = [
     { id: 'video',      x: 130, y: 20  },
     { id: 'connect',    x: 130, y: 130 },
     { id: 'debug',      x: 130, y: 240 },
-    { id: 'gpu',        x: 130, y: 350 },
     { id: 'texteditor', x: 240, y: 20  },
     { id: 'browser',    x: 240, y: 130 }
 ];
@@ -46,11 +48,6 @@ FAR.WM._saveDesktopIcons = function (list) {
     } catch (e) { /* ignore */ }
 };
 
-/**
- * Гарантирует, что условные приложения, которые сейчас
- * зарегистрированы, присутствуют в layout.
- * @returns {boolean} true, если layout был изменён.
- */
 FAR.WM._ensureConditionalAppOnDesktop = function (layout) {
     if (!Array.isArray(layout)) return false;
     const existingIds = new Set(
@@ -150,11 +147,6 @@ FAR.WM._renderDesktopIcons = function () {
     });
 };
 
-/**
- * Планировщик отложенной перерисовки рабочего стола.
- * Нужен, чтобы десяток registerApp() при старте не запускал
- * десять полных перерисовок.
- */
 FAR.WM._scheduleDesktopRender = function () {
     if (FAR.WM._desktopRenderTimer) return;
     FAR.WM._desktopRenderTimer = setTimeout(function () {
@@ -307,11 +299,8 @@ FAR.WM._positionContextMenu = function (menu, x, y) {
     let left = x;
     let top = y;
 
-    // Сдвигаем, если вылезает за правый/нижний край
     if (left + rect.width > vw - 4) left = vw - rect.width - 4;
     if (top + rect.height > vh - 4) top = vh - rect.height - 4;
-
-    // Защита от выхода за верхний/левый край (актуально для длинных меню, у которых сработал max-height)
     if (left < 4) left = 4;
     if (top < 4) top = 4;
 

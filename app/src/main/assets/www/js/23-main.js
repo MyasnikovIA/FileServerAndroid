@@ -1,6 +1,9 @@
 // ============================================================
 // Точка входа: загрузка модалок, инициализация, автоподключение
 // ============================================================
+//
+// FIX 2026-10-30 v4: удалена модалка gpu-monitor.html.
+// ============================================================
 
 FAR.loadModalFragment = function(path) {
     try {
@@ -38,7 +41,7 @@ FAR.injectModals = function() {
         'modals/gcode-viewer.html',
         'modals/browser.html',
         'modals/gamepad-setup.html',
-        'modals/gpu-monitor.html',
+        // 'modals/gpu-monitor.html',  <-- УДАЛЕНО
         'modals/ollama.html',
         'modals/progress.html',
         'modals/loading.html',

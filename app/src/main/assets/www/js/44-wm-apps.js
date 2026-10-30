@@ -24,14 +24,6 @@ FAR.WM.openApp = async function (appId, opts) {
         return null;
     }
 
-    // ============================================================
-    // КРИТИЧНО: если у приложения есть directLaunch — вызываем его
-    // и НЕ пытаемся создавать WM-окно. Так работают:
-    //   • Android программы (android:...)
-    //   • Настройки Android (settings)
-    //   • Лаунчер по умолчанию (default-launcher)
-    //   • Обновить список (android:refresh)
-    // ============================================================
     if (typeof def.directLaunch === 'function') {
         console.log('[WM openApp] directLaunch: ' + appId);
         try {
@@ -78,7 +70,6 @@ FAR.WM.openApp = async function (appId, opts) {
         }
     });
 
-    // Проверка: приложение без open() не должно создавать пустое окно
     if (typeof def.open !== 'function') {
         console.error('[WM app] у приложения нет open() и нет directLaunch: ' + appId);
         try { FAR.WM.closeWindow(win.id, true); } catch (e) {}
@@ -335,14 +326,14 @@ FAR.WM.registerApp({
 });
 
 // ============================================================
-// Приложение: Подключение
+// Приложение: Подключение к удалённому рабочему столу
 // ============================================================
 
 FAR.WM.registerApp({
     id: 'connect',
-    title: 'Подключение к БД',
-    icon: '🔐',
-    keywords: 'подключение база login conn',
+    title: 'Другой рабочий стол',
+    icon: '🖥️',
+    keywords: 'подключение другой рабочий стол remote desktop server',
     singleton: true,
     width: 460,
     height: 460,
