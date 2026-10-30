@@ -71,6 +71,8 @@ public class FileServerAndroid {
                 new InetSocketAddress(config.host, config.port), 0);
 
         srv.createContext("/api/events", new SseHandler());
+        // РЕГИСТРАЦИЯ ПРОКСИ-ОБРАБОТЧИКА
+        srv.createContext("/api/proxy",  ex -> ProxyHandler.handle(ex));
         srv.createContext("/api",        new ApiHandler());
         srv.createContext("/",           rootHandler);
 
@@ -78,7 +80,6 @@ public class FileServerAndroid {
         srv.start();
         server = srv;
 
-        // Асинхронное сканирование дисков и запуск вотчера (чтобы не блокировать сервер)
         new Thread(() -> {
             try {
                 mountExternalDrives();
@@ -144,20 +145,17 @@ public class FileServerAndroid {
                         dir = vol.getDirectory();
                     }
 
-                    // Резервный метод для старых Android или если getDirectory вернул null
                     if (dir == null) {
                         String uuid = vol.getUuid();
                         if (uuid != null) dir = new File("/storage/" + uuid);
                     }
 
-                    // Проверяем, что путь существует и доступен для чтения (избегаем /mnt/media_rw)
                     if (dir != null && dir.exists() && dir.isDirectory() && dir.canRead()) {
                         addShareIfMissing(vol.getDescription(context), dir);
                     }
                 }
             }
 
-            // Резервный поиск в /storage для ТВ-приставок
             File[] storageDirs = new File("/storage").listFiles();
             if (storageDirs != null) {
                 for (File f : storageDirs) {
@@ -179,12 +177,10 @@ public class FileServerAndroid {
         String volName = rawName != null ? rawName.replaceAll("[^a-zA-Z0-9_\\-]", "_") : "External_Drive";
         if (volName.isEmpty()) volName = "External_Drive";
 
-        // Проверяем, не добавлен ли уже этот путь
         for (Config.Share sh : config.shares) {
             if (dir.getAbsolutePath().equals(sh.physical)) return;
         }
 
-        // Генерируем уникальное имя
         String baseName = volName;
         int counter = 1;
         while (config.findShare(volName) != null) {

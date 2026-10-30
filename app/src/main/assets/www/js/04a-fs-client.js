@@ -14,10 +14,12 @@ FAR.FsClient = function (baseUrl, opts) {
         (this.token ? ':token' : (this.user ? ':' + this.user : ''));
     this._eventSource = null;
     this.onFileEvent = null;
+
+    // Флаг для работы через прокси
+    this.isProxy = !!opts.isProxy;
 };
 
 FAR.FsClient.prototype._authHeader = function () {
-    // Приоритет: Bearer-токен (когда он есть — используем только его)
     if (this.token) return 'Bearer ' + this.token;
     if (!this.user) return null;
     const raw = this.user + ':' + (this.pass || '');
@@ -30,30 +32,24 @@ FAR.FsClient.prototype._authHeader = function () {
 FAR.FsClient.prototype._fetch = function (url, opts) {
     opts = opts || {};
     opts.headers = opts.headers || {};
-    // Cookie отправляются автоматически и сохраняются из ответов.
     opts.credentials = 'include';
-    const auth = this._authHeader();
-    if (auth) opts.headers['Authorization'] = auth;
+
+    if (this.isProxy) {
+        // В режиме прокси мы не отправляем наш Authorization.
+        // Вместо этого отправляем токен целевого сервера в спец. заголовке.
+        if (this.token) {
+            opts.headers['X-Proxy-Target-Token'] = this.token;
+        }
+        delete opts.headers['Authorization'];
+    } else {
+        // Прямое подключение
+        const auth = this._authHeader();
+        if (auth) opts.headers['Authorization'] = auth;
+    }
+
     return fetch(url, opts);
 };
 
-// ============================================================
-// Ретраи для идемпотентных запросов.
-//
-// Зачем: при параллельных копированиях сервер может ответить
-// 5xx (временная перегрузка / гонка за директорию / race при
-// создании временного файла). Повтор с экспоненциальной паузой
-// почти всегда проходит со второй-третьей попытки.
-//
-// ВАЖНО: opts.body должен быть ArrayBuffer/Uint8Array/undefined —
-// он не «вычитывается» fetch'ем, поэтому повтор безопасен.
-// ReadableStream повторять нельзя — здесь такие тела не используются.
-//
-// Параметры:
-//   maxAttempts = 4           — всего попыток (1 + 3 ретрая)
-//   delays      = [150,400,900,1800] мс  — паузы перед 2-й, 3-й, 4-й попыткой
-//                                          (плюс джиттер 0–100 мс)
-// ============================================================
 FAR.FsClient.prototype._fetchWithRetry = async function (url, opts, retryOpts) {
     opts = opts || {};
     retryOpts = retryOpts || {};
@@ -68,10 +64,8 @@ FAR.FsClient.prototype._fetchWithRetry = async function (url, opts, retryOpts) {
         try {
             const res = await this._fetch(url, opts);
 
-            // Ретраим 5xx (500, 502, 503, 504) — кроме последней попытки
             const is5xx = res.status >= 500 && res.status < 600;
             if (is5xx && attempt < maxAttempts - 1) {
-                // Сливаем тело, чтобы освободить соединение
                 try { await res.text(); } catch (e) { /* ignore */ }
 
                 const base = delays[attempt] || delays[delays.length - 1];
@@ -89,7 +83,6 @@ FAR.FsClient.prototype._fetchWithRetry = async function (url, opts, retryOpts) {
 
             return res;
         } catch (e) {
-            // Сетевая ошибка (DNS, CORS, offline и т.п.) — тоже ретраим
             lastErr = e;
 
             if (attempt < maxAttempts - 1) {
@@ -383,7 +376,7 @@ FAR.FsClient.prototype.remove = async function (doc) {
 };
 
 // ============================================================
-// getAttachment — читает тело файла через ПРЯМОЙ URL.
+// getAttachment
 // ============================================================
 FAR.FsClient.prototype.getAttachment = async function (id, name, opts) {
     opts = opts || {};
@@ -418,13 +411,7 @@ FAR.FsClient.prototype.getAttachment = async function (id, name, opts) {
 };
 
 // ---- putAttachment ----
-//
-// ЕДИНАЯ АТОМАРНАЯ ЗАПИСЬ: один PUT /api/write с содержимым.
-// При превышении квоты (507) файл не создаётся вовсе.
-//
-// Ретраи на 5xx: при параллельных копированиях сервер может
-// ответить 500 из-за гонки — повтор с экспоненциальной паузой
-// проходит со 2-3 попытки.
+
 FAR.FsClient.prototype.putAttachment = async function (id, name, rev, blob, contentType) {
     const path = this._pathFromId(id);
     let body = blob;
@@ -458,7 +445,9 @@ FAR.FsClient.prototype.startWatching = function () {
     if (typeof EventSource === 'undefined') return;
 
     let url = this.baseUrl + '/api/events';
-    if (this.token) url += '?token=' + encodeURIComponent(this.token);
+    if (this.token && !this.isProxy) { // В режиме прокси токен не нужен в URL
+        url += '?token=' + encodeURIComponent(this.token);
+    }
 
     const es = new EventSource(url);
     this._eventSource = es;
