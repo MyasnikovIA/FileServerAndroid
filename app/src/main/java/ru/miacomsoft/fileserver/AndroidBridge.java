@@ -21,6 +21,7 @@ import android.util.Log;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 
+import androidx.browser.customtabs.CustomTabsIntent;
 import androidx.core.content.FileProvider;
 
 import org.json.JSONArray;
@@ -77,45 +78,20 @@ public class AndroidBridge {
     @JavascriptInterface
     public boolean isAndroidApp() { return true; }
 
-    // ============================================================
-    // НАТИВНЫЙ БРАУЗЕР
-    // ============================================================
-
     /**
-     * Открывает URL в нативном WebView-браузере (BrowserActivity).
-     *
-     * Используется из JS: FAR.openBrowser() на Android для внешних
-     * адресов — вместо iframe, который блокируется заголовками
-     * X-Frame-Options и CSP frame-ancestors.
-     *
-     * @param url  адрес для открытия
-     * @param title опциональный заголовок окна
-     * @return true если удалось запустить активити
+     * Открывает URL в нашем встроенном нативном браузере (BrowserActivity).
      */
     @JavascriptInterface
     public boolean openInAppBrowser(String url, String title) {
         if (url == null || url.isEmpty()) url = "https://www.google.com";
         Log.i(TAG, "openInAppBrowser: " + url);
+
         try {
             Intent intent = new Intent(context, BrowserActivity.class);
             intent.putExtra(BrowserActivity.EXTRA_URL, url);
             if (title != null && !title.isEmpty()) {
                 intent.putExtra(BrowserActivity.EXTRA_TITLE, title);
             }
-
-            // Предпочтительный способ: запускаем из Activity, чтобы
-            // браузер попал в тот же task и кнопка «назад» в нём
-            // возвращала в MainActivity (а не в лаунчер).
-            if (activity != null && !activity.isDestroyed()
-                    && Build.VERSION.SDK_INT >= 17) {
-                try {
-                    activity.startActivity(intent);
-                    return true;
-                } catch (Exception inner) {
-                    Log.w(TAG, "activity.startActivity failed, fallback", inner);
-                }
-            }
-
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(intent);
             return true;
@@ -125,7 +101,6 @@ public class AndroidBridge {
         }
     }
 
-    /** Упрощённая перегрузка — JS может вызвать с одним аргументом. */
     @JavascriptInterface
     public boolean openInAppBrowser(String url) {
         return openInAppBrowser(url, null);
@@ -630,7 +605,6 @@ public class AndroidBridge {
             conn.setReadTimeout(REMOTE_READ_TIMEOUT_MS);
             conn.setDoOutput(true);
             conn.setRequestProperty("Content-Type", "application/json");
-            // Подмена User-Agent для обхода блокировок на сервере
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
 
             if (conn instanceof HttpsURLConnection) {

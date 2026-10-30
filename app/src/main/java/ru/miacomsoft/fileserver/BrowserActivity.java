@@ -3,6 +3,7 @@ package ru.miacomsoft.fileserver;
 import android.annotation.SuppressLint;
 import android.app.DownloadManager;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.net.http.SslError;
 import android.os.Build;
@@ -18,12 +19,14 @@ import android.webkit.PermissionRequest;
 import android.webkit.SslErrorHandler;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
@@ -42,6 +45,7 @@ public class BrowserActivity extends AppCompatActivity {
     private EditText    addressBar;
     private ProgressBar progressBar;
     private Button      backBtn, fwdBtn, reloadBtn, goBtn;
+    private ImageButton closeBtn;
 
     private ValueCallback<Uri[]> filePathCallback;
 
@@ -64,6 +68,7 @@ public class BrowserActivity extends AppCompatActivity {
         fwdBtn      = findViewById(R.id.brFwd);
         reloadBtn   = findViewById(R.id.brReload);
         goBtn       = findViewById(R.id.brGo);
+        closeBtn    = findViewById(R.id.brClose);
 
         setupWebView();
         bindButtons();
@@ -89,14 +94,16 @@ public class BrowserActivity extends AppCompatActivity {
         s.setJavaScriptCanOpenWindowsAutomatically(true);
         s.setSupportMultipleWindows(true);
 
+        // Разрешаем смешанный контент (HTTP внутри HTTPS)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         }
 
+        // Маскируемся под десктопный Chrome
         s.setUserAgentString(
-                "Mozilla/5.0 (Linux; Android 10; K) " +
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
                         "AppleWebKit/537.36 (KHTML, like Gecko) " +
-                        "Chrome/120.0.0.0 Mobile Safari/537.36");
+                        "Chrome/120.0.0.0 Safari/537.36");
 
         CookieManager cm = CookieManager.getInstance();
         cm.setAcceptCookie(true);
@@ -105,9 +112,17 @@ public class BrowserActivity extends AppCompatActivity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-                // Игнорируем ошибки SSL (например, самоподписанные сертификаты на порту 8080)
-                Log.w(TAG, "SSL error: " + error.toString() + " — proceeding anyway.");
+                // !!! ИГНОРИРУЕМ ЛЮБЫЕ ОШИБКИ SSL (САМОПОДПИСАННЫЕ СЕРТИФИКАТЫ) !!!
+                Log.w(TAG, "SSL error: " + error.toString() + " — PROCEEDING ANYWAY.");
                 handler.proceed();
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (request.isForMainFrame()) {
+                    Log.e(TAG, "Page load error: " + error.getDescription() + " (code " + error.getErrorCode() + ")");
+                    Toast.makeText(BrowserActivity.this, "Ошибка сети: " + error.getDescription(), Toast.LENGTH_LONG).show();
+                }
             }
 
             @Override
@@ -128,7 +143,7 @@ public class BrowserActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 addressBar.setText(url);
             }
 
@@ -201,10 +216,6 @@ public class BrowserActivity extends AppCompatActivity {
                 String fn = android.webkit.URLUtil.guessFileName(url, contentDisposition, mimeType);
                 req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fn);
                 req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-                String cookie = CookieManager.getInstance().getCookie(url);
-                if (cookie != null && !cookie.isEmpty()) {
-                    req.addRequestHeader("Cookie", cookie);
-                }
                 DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
                 if (dm != null) dm.enqueue(req);
             } catch (Exception e) {
@@ -217,6 +228,7 @@ public class BrowserActivity extends AppCompatActivity {
         backBtn.setOnClickListener(v -> { if (webView.canGoBack()) webView.goBack(); });
         fwdBtn.setOnClickListener(v -> { if (webView.canGoForward()) webView.goForward(); });
         reloadBtn.setOnClickListener(v -> webView.reload());
+        closeBtn.setOnClickListener(v -> finish());
 
         goBtn.setOnClickListener(v -> {
             String input = addressBar.getText().toString().trim();
@@ -241,8 +253,8 @@ public class BrowserActivity extends AppCompatActivity {
         if (input.startsWith("//")) return "https:" + input;
 
         if (input.matches("^[^\\s/]+\\.[^\\s/]+.*") && !input.contains(" ")) {
-            // Если указан порт или локальный IP — используем http://
-            if (input.matches("^[^\\s/]+:\\d+.*") || input.matches("^(\\d{1,3}\\.){3}\\d{1,3}.*")) {
+            // Если явно указан порт 8080 или локальный IP, пробуем http://
+            if (input.matches(".*:\\d+.*") || input.matches("^(\\d{1,3}\\.){3}\\d{1,3}.*")) {
                 return "http://" + input;
             }
             return "https://" + input;
