@@ -1,5 +1,11 @@
 // ============================================================
 // 05-connection.js — подключение к FileServer.
+//
+// ВАЖНО: connectToDb НЕ считается успешным, если у пользователя
+// нет доступа ни к одному диску (info.shares === []). Это
+// защищает от «пустого входа»: логин пропущен (user не задан),
+// info отвечает 200 с пустым списком shares — раньше это
+// трактовалось как успех, WM открывался без дисков.
 // ============================================================
 
 FAR.getDefaultConn = function () {
@@ -39,7 +45,7 @@ FAR.clearConnFromLS = function () {
 FAR.ensureDb = function () {
     if (!FAR.db) {
         FAR.toast('Нет подключения к FileServer. Войдите в систему.', 'warning');
-        FAR.openConnModal();
+        FAR.openConnModal(true);
         return false;
     }
     return true;
@@ -62,7 +68,6 @@ FAR.connectToDb = async function (cfg) {
     const attemptConnect = async (useProxy) => {
         let actualUrl = originalUrl;
         if (useProxy) {
-            // Кодируем URL в Base64 URL-safe
             const b64 = btoa(unescape(encodeURIComponent(originalUrl)))
                 .replace(/\+/g, '-')
                 .replace(/\//g, '_')
@@ -72,11 +77,6 @@ FAR.connectToDb = async function (cfg) {
 
         let token = '';
         if (cfg.user) {
-            // ВАЖНО: FAR.FsClient.login использует fetch внутри.
-            // Нам нужно передать ему заголовок X-Proxy-Target-Token? Нет, login идет без токена,
-            // мы просто авторизуемся на целевом сервере через прокси.
-            // Для этого в login мы передаем actualUrl (с /api/proxy/.../api/login),
-            // и fetch пойдет на наш прокси, который перенаправит на целевой сервер.
             const loginRes = await FAR.FsClient.login(actualUrl, cfg.user, cfg.pass || '');
             token = loginRes.token || '';
             if (!token) throw new Error('Сервер не выдал токен');
@@ -91,6 +91,28 @@ FAR.connectToDb = async function (cfg) {
         client._originalUrl = originalUrl;
 
         const info = await client.info();
+
+        // ============================================================
+        // КРИТИЧНО: без доступных шар подключение не имеет смысла.
+        // Случай «user пустой → логин пропущен → info вернул 200 с
+        // пустым shares» раньше считался успехом, и WM открывался
+        // без дисков. Теперь это ошибка с status=401 — её ловит
+        // submitConnModal, показывает сообщение и оставляет
+        // модалку открытой.
+        // ============================================================
+        const shares = Array.isArray(info.shares) ? info.shares : [];
+        if (shares.length === 0) {
+            const err = new Error(
+                cfg.user
+                    ? 'Пользователь «' + cfg.user + '» не имеет доступа ни к одному диску'
+                    : 'Требуется авторизация: введите имя пользователя и пароль'
+            );
+            err.status = 401;
+            err.name = 'NoAccessError';
+            err.userMissing = !cfg.user;
+            throw err;
+        }
+
         return { client, info, token };
     };
 
@@ -104,21 +126,25 @@ FAR.connectToDb = async function (cfg) {
             result = await attemptConnect(false);
         } catch (e) {
             console.warn('[connect] Прямое подключение не удалось:', e.message);
-            // Если ошибка сети/CORS/таймаут, пробуем через прокси
+            // NoAccessError повторять через прокси бессмысленно —
+            // доступ всё равно не появится. 401/403 — то же.
+            if (e.name === 'NoAccessError' || e.status === 401 || e.status === 403) {
+                throw e;
+            }
             if (e.name === 'NetworkError' || e.name === 'TypeError' ||
                 e.message === 'Failed to fetch' || e.message.includes('Таймаут') ||
                 e.message.includes('CORS')) {
                 console.log('[connect] Переключение на прокси-сервер...');
                 result = await attemptConnect(true);
             } else {
-                throw e; // Если ошибка авторизации (401) или другая, пробрасываем дальше
+                throw e;
             }
         }
     }
 
-    const info = result.info;
+    const info   = result.info;
     const client = result.client;
-    const token = result.token;
+    const token  = result.token;
 
     FAR.consoleEnabled = !!info.console;
     FAR.videoChatEnabled = !!info.videoChatEnabled;
