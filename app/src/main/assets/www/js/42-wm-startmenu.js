@@ -1,6 +1,20 @@
 // ============================================================
 // 42-wm-startmenu.js — меню Пуск с категориями и подменю
 // ============================================================
+//
+// FIX 2026-10-30 v3:
+//   1. Каждому .wm-start-item навешивается атрибут data-launch-pkg
+//      (для Android-приложений) — его читает нативный ACTION_UP.
+//   2. Установлен глобальный touchstart/touchend listener, который
+//      НЕ зависит от click-события (click может не сработать, если
+//      меню закрывается раньше — элемент исчезает через display:none).
+//   3. При клике также пишется console.log('__LAUNCH_APP__|pkg|act'),
+//      который ловит MainActivity.onConsoleMessage — третий backup.
+//
+// Дебаунс в AndroidBridge.launchApp гарантирует единственный запуск.
+// ============================================================
+
+console.log('[StartMenu] VERSION 2026-10-30 v3 — touch launcher installed');
 
 FAR.WM.toggleStartMenu = function () {
     const sm = document.getElementById('wmStartMenu');
@@ -15,16 +29,10 @@ FAR.WM.openStartMenu = function () {
     if (!sm) return;
     sm.classList.add('open');
     if (btn) btn.classList.add('open');
-
     FAR.WM._hideStartSubmenu();
     FAR.WM._renderStartMenu('');
-
     const search = document.getElementById('wmStartSearch');
-    if (search) {
-        // Не фокусируем — на тач-устройствах сразу вылезает клавиатура.
-        // Очищаем только значение.
-        search.value = '';
-    }
+    if (search) search.value = '';
 };
 
 FAR.WM.closeStartMenu = function () {
@@ -33,16 +41,11 @@ FAR.WM.closeStartMenu = function () {
     if (sm) sm.classList.remove('open');
     if (btn) btn.classList.remove('open');
     FAR.WM._hideStartSubmenu();
-
     const search = document.getElementById('wmStartSearch');
     if (search && document.activeElement === search) {
         try { search.blur(); } catch (e) {}
     }
 };
-
-// ============================================================
-// Категории приложений
-// ============================================================
 
 FAR.WM.APP_CATEGORIES = [
     { id: 'files',  title: 'Файлы и документы',      icon: '📁' },
@@ -55,52 +58,26 @@ FAR.WM.APP_CATEGORIES = [
 ];
 
 FAR.WM.APP_CATEGORY_MAP = {
-    explorer:   'files',
-    viewer:     'files',
-    texteditor: 'files',
-    pdf:        'files',
-    browser:    'files',
-
-    panorama:   'media',
-    panoeditor: 'media',
-    mp3:        'media',
-    video:      'media',
-
-    jsdos:      'games',
-    nes:        'games',
-    emulator:   'games',
-
-    ollama:     'ai',
-
-    videochat:   'stream',
-    broadcaster: 'stream',
-
-    connect:   'system',
-    gamepad:   'system',
-    gpu:       'system',
-    debug:     'system',
-    log:       'system',
-    console:   'system',
-
-    settings:          'system',
-    'default-launcher': 'system'
+    explorer: 'files', viewer: 'files', texteditor: 'files',
+    pdf: 'files', browser: 'files',
+    panorama: 'media', panoeditor: 'media', mp3: 'media', video: 'media',
+    jsdos: 'games', nes: 'games', emulator: 'games',
+    ollama: 'ai',
+    videochat: 'stream', broadcaster: 'stream',
+    connect: 'system', gamepad: 'system', gpu: 'system',
+    debug: 'system', log: 'system', console: 'system',
+    settings: 'system', 'default-launcher': 'system'
 };
-
-// ============================================================
-// Иконка приложения: emoji / img / аватар с первой буквой
-// ============================================================
 
 FAR.WM._renderAppIcon = function (app, size) {
     size = size || 24;
     if (!app) return '📦';
-
     if (app.iconImg) {
         return '<img src="' + FAR.escapeHtml(app.iconImg) + '" ' +
             'style="width:' + size + 'px;height:' + size + 'px;' +
             'border-radius:' + Math.round(size / 5) + 'px;' +
             'vertical-align:middle;object-fit:contain;" alt="">';
     }
-
     if (app.firstLetter) {
         const color = app.firstLetterColor || '#89b4fa';
         return '<span style="display:inline-flex;align-items:center;justify-content:center;' +
@@ -111,33 +88,20 @@ FAR.WM._renderAppIcon = function (app, size) {
             'vertical-align:middle;">' +
             FAR.escapeHtml(app.firstLetter) + '</span>';
     }
-
     return FAR.escapeHtml(app.icon || '📦');
 };
 
-// ============================================================
-// Единая точка запуска приложения из меню Пуск
-// ============================================================
-//
-// Приоритет:
-//   1) directLaunch — Android-приложения, Settings, Default Launcher
-//   2) androidPkg    — fallback через FAR.AndroidPrograms.launch
-//   3) openApp(id)   — обычные WM-приложения
-//
 FAR.WM._invokeApp = function (app) {
     if (!app) return;
-
     if (typeof app.directLaunch === 'function') {
         try { app.directLaunch(); return; }
         catch (err) { console.error('[StartMenu] directLaunch:', err); }
     }
-
     if (app.androidPkg && window.FAR && FAR.AndroidPrograms &&
         typeof FAR.AndroidPrograms.launch === 'function') {
         FAR.AndroidPrograms.launch(app.androidPkg, app.androidActivity);
         return;
     }
-
     FAR.WM.openApp(app.id);
 };
 
@@ -167,9 +131,7 @@ FAR.WM._ensureStartSubmenu = function () {
     el.addEventListener('mouseleave', function () {
         FAR.WM._scheduleHideStartSubmenu();
     });
-    el.addEventListener('mousedown', function (e) {
-        e.stopPropagation();
-    });
+    el.addEventListener('mousedown', function (e) { e.stopPropagation(); });
 
     const root = document.getElementById('wmRoot') || document.body;
     root.appendChild(el);
@@ -192,8 +154,13 @@ FAR.WM._hideStartSubmenu = function () {
         FAR.WM._startSubmenuTimer = null;
     }
     if (FAR.WM._startSubmenuEl) {
-        FAR.WM._startSubmenuEl.style.display = 'none';
-        FAR.WM._startSubmenuEl.innerHTML = '';
+        const el = FAR.WM._startSubmenuEl;
+        el.style.display = 'none';
+        if (el._farClearTimer) clearTimeout(el._farClearTimer);
+        el._farClearTimer = setTimeout(function () {
+            el._farClearTimer = null;
+            if (el.style.display === 'none') el.innerHTML = '';
+        }, 0);
     }
     FAR.WM._startSubmenuCategory = null;
     document.querySelectorAll('.wm-start-cat-row.active').forEach(function (r) {
@@ -205,6 +172,7 @@ FAR.WM._showStartSubmenu = function (rowEl, categoryId, categoryIcon,
                                      categoryTitle, apps) {
     const el = FAR.WM._ensureStartSubmenu();
 
+    if (el._farClearTimer) { clearTimeout(el._farClearTimer); el._farClearTimer = null; }
     if (FAR.WM._startSubmenuTimer) {
         clearTimeout(FAR.WM._startSubmenuTimer);
         FAR.WM._startSubmenuTimer = null;
@@ -221,16 +189,44 @@ FAR.WM._showStartSubmenu = function (rowEl, categoryId, categoryIcon,
         const item = document.createElement('div');
         item.className = 'wm-start-item';
         item.setAttribute('data-app-id', app.id);
+
+        // ============================================================
+        // Ключевые атрибуты для нативного перехвата ACTION_UP.
+        // Без них нативный обработчик не узнает, что запускать.
+        // ============================================================
+        if (app.androidPkg) {
+            item.setAttribute('data-launch-pkg', app.androidPkg);
+            item.setAttribute('data-launch-activity', app.androidActivity || '');
+        }
+
         item.innerHTML =
             '<span class="wm-si-emoji">' + FAR.WM._renderAppIcon(app, 32) + '</span>' +
             '<span class="wm-si-label">' + FAR.escapeHtml(app.title) + '</span>';
         item.title = app.title;
+
         item.addEventListener('click', function (e) {
+            e.preventDefault();
             e.stopPropagation();
+
+            // ПЕРВОЕ — запускаем (даже если прячем меню).
+            // ВТОРОЕ — скрываем.
+            try {
+                if (app.androidPkg) {
+                    // Третий независимый путь: native onConsoleMessage.
+                    try {
+                        console.log('__LAUNCH_APP__|' + app.androidPkg + '|' +
+                            (app.androidActivity || ''));
+                    } catch (err) {}
+                }
+                FAR.WM._invokeApp(app);
+            } catch (err) {
+                console.error('[StartMenu] invokeApp:', err);
+            }
+
             FAR.WM._hideStartSubmenu();
             FAR.WM.closeStartMenu();
-            FAR.WM._invokeApp(app);
         });
+
         el.appendChild(item);
     });
 
@@ -247,12 +243,10 @@ FAR.WM._showStartSubmenu = function (rowEl, categoryId, categoryIcon,
 
     let left = rect.right + margin;
     let top  = rect.top;
-
     if (left + subRect.width > vw - margin) {
         left = rect.left - subRect.width - margin;
         if (left < margin) left = Math.max(margin, vw - subRect.width - margin);
     }
-
     if (top + subRect.height > vh - margin) {
         top = vh - subRect.height - margin;
         if (top < margin) top = margin;
@@ -269,10 +263,6 @@ FAR.WM._showStartSubmenu = function (rowEl, categoryId, categoryIcon,
     });
     rowEl.classList.add('active');
 };
-
-// ============================================================
-// Рендер списка
-// ============================================================
 
 FAR.WM._renderStartMenu = function (query) {
     const list = document.getElementById('wmStartList');
@@ -292,43 +282,46 @@ FAR.WM._renderStartMenu = function (query) {
 
     list.innerHTML = '';
 
-    // ============================================================
-    // Режим поиска: плоский список
-    // ============================================================
     if (q) {
         FAR.WM._hideStartSubmenu();
-
         if (filtered.length === 0) {
             list.innerHTML = '<div style="text-align:center;color:#6c7086;' +
                 'padding:20px;font-size:12px;">Ничего не найдено</div>';
             return;
         }
-
         filtered.forEach(function (app) {
             const item = document.createElement('div');
             item.className = 'wm-start-item';
             item.setAttribute('data-app-id', app.id);
+            if (app.androidPkg) {
+                item.setAttribute('data-launch-pkg', app.androidPkg);
+                item.setAttribute('data-launch-activity', app.androidActivity || '');
+            }
             item.innerHTML =
                 '<span class="wm-si-emoji">' + FAR.WM._renderAppIcon(app, 32) + '</span>' +
                 '<span class="wm-si-label">' + FAR.escapeHtml(app.title) + '</span>';
             item.title = app.title;
-            item.addEventListener('click', function () {
-                FAR.WM.closeStartMenu();
-                FAR.WM._invokeApp(app);
+            item.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                try {
+                    if (app.androidPkg) {
+                        console.log('__LAUNCH_APP__|' + app.androidPkg + '|' +
+                            (app.androidActivity || ''));
+                    }
+                    FAR.WM.closeStartMenu();
+                    FAR.WM._invokeApp(app);
+                } catch (err) {
+                    console.error('[StartMenu] search invokeApp:', err);
+                }
             });
             list.appendChild(item);
         });
         return;
     }
 
-    // ============================================================
-    // Обычный режим: строки категорий + подменю
-    // ============================================================
-
     const buckets = {};
-    FAR.WM.APP_CATEGORIES.forEach(function (cat) {
-        buckets[cat.id] = [];
-    });
+    FAR.WM.APP_CATEGORIES.forEach(function (cat) { buckets[cat.id] = []; });
     filtered.forEach(function (a) {
         const catId = FAR.WM.APP_CATEGORY_MAP[a.id] || 'other';
         if (!buckets[catId]) buckets[catId] = [];
@@ -336,7 +329,6 @@ FAR.WM._renderStartMenu = function (query) {
     });
 
     let anyShown = false;
-
     FAR.WM.APP_CATEGORIES.forEach(function (cat) {
         const items = buckets[cat.id];
         if (!items || items.length === 0) return;
@@ -363,7 +355,6 @@ FAR.WM._renderStartMenu = function (query) {
                 FAR.WM._showStartSubmenu(row, cat.id, cat.icon, cat.title, items);
             }
         });
-
         list.appendChild(row);
     });
 
@@ -380,10 +371,6 @@ FAR.WM._renderStartMenu = function (query) {
     }
 };
 
-// ============================================================
-// Привязка UI
-// ============================================================
-
 FAR.WM._bindStartMenuUI = function () {
     const btn = document.getElementById('wmStartBtn');
     if (btn && !btn._wmBound) {
@@ -393,7 +380,6 @@ FAR.WM._bindStartMenuUI = function () {
             FAR.WM.toggleStartMenu();
         });
     }
-
     const search = document.getElementById('wmStartSearch');
     if (search && !search._wmBound) {
         search._wmBound = true;
@@ -401,9 +387,8 @@ FAR.WM._bindStartMenuUI = function () {
             FAR.WM._renderStartMenu(search.value);
         });
         search.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') {
-                FAR.WM.closeStartMenu();
-            } else if (e.key === 'Enter') {
+            if (e.key === 'Escape') FAR.WM.closeStartMenu();
+            else if (e.key === 'Enter') {
                 const first = document.querySelector('#wmStartList .wm-start-item');
                 if (first) first.click();
             }
@@ -423,10 +408,6 @@ FAR.WM.exit = function () {
     return FAR.WM._origExit.apply(this, arguments);
 };
 
-// ============================================================
-// Logout
-// ============================================================
-
 FAR.WM.logout = function () {
     FAR.WM.closeStartMenu();
     if (typeof FAR.onAuthButton === 'function') {
@@ -434,3 +415,78 @@ FAR.WM.logout = function () {
         FAR.onAuthButton();
     }
 };
+
+// ============================================================
+// ГЛОБАЛЬНЫЙ TOUCH LAUNCHER — устанавливается один раз.
+// Не зависит от click и от того, скрывается ли меню через display:none.
+// ============================================================
+
+(function installStartMenuTouchLauncher() {
+    if (window._farStartMenuTouchInstalled) return;
+    window._farStartMenuTouchInstalled = true;
+
+    document.addEventListener('touchstart', function (e) {
+        window._farTouchStart = null;
+        if (!e.touches || e.touches.length !== 1) return;
+        const t = e.touches[0];
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        if (!el || !el.closest) return;
+        const item = el.closest('.wm-start-item');
+        if (!item) return;
+
+        window._farTouchStart = {
+            x: t.clientX,
+            y: t.clientY,
+            time: Date.now(),
+            pkg:   item.getAttribute('data-launch-pkg')   || '',
+            act:   item.getAttribute('data-launch-activity') || '',
+            appId: item.getAttribute('data-app-id')       || ''
+        };
+        if (window._farTouchStart.pkg || window._farTouchStart.appId) {
+            console.log('[StartMenu] touchstart captured: '
+                + (window._farTouchStart.pkg || window._farTouchStart.appId));
+        }
+    }, { capture: true, passive: true });
+
+    document.addEventListener('touchend', function (e) {
+        const s = window._farTouchStart;
+        if (!s) return;
+        const t = e.changedTouches && e.changedTouches[0];
+        if (!t) return;
+
+        const dx = t.clientX - s.x;
+        const dy = t.clientY - s.y;
+        const dt = Date.now() - s.time;
+
+        if (Math.abs(dx) > 25 || Math.abs(dy) > 25 || dt > 700 || dt < 15) {
+            window._farTouchStart = null;
+            return;
+        }
+
+        console.log('[StartMenu] JS tap launch: '
+            + (s.pkg || s.appId));
+
+        // 1) Прямой вызов нативного метода — самый надёжный путь.
+        if (s.pkg && window.AndroidBridge &&
+            typeof window.AndroidBridge.launchApp === 'function') {
+            try { window.AndroidBridge.launchApp(s.pkg, s.act); }
+            catch (err) { console.error('[StartMenu] bridge launch:', err); }
+        } else if (s.appId && window.FAR && FAR.WM) {
+            try {
+                const app = FAR.WM.getApp && FAR.WM.getApp(s.appId);
+                if (app) FAR.WM._invokeApp(app);
+            } catch (err) { console.error('[StartMenu] invokeApp:', err); }
+        }
+
+        // 2) Скрываем меню — после запуска.
+        try {
+            if (window.FAR && FAR.WM) {
+                FAR.WM._hideStartSubmenu();
+                FAR.WM.closeStartMenu();
+            }
+        } catch (err) {}
+
+        // Не обнуляем window._farTouchStart — пусть native ACTION_UP
+        // тоже увидит его (дебаунс предотвратит двойной запуск).
+    }, { capture: true, passive: true });
+})();

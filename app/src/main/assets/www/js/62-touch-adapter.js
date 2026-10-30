@@ -10,6 +10,13 @@
 //   • касание края .wm-window → resize через существующие .wm-resize-*
 //
 // На ПК (mouse/trackpad) НИЧЕГО не меняет.
+//
+// FIX (2024): onGlobalTapForClose больше не закрывает меню «Пуск»,
+// если тап пришёлся на подменю .wm-start-submenu. Ранее closeStartMenu()
+// срабатывал ДО того, как WebView доставлял 'click' на пункт подменю —
+// и элемент к моменту click уже был уничтожен через innerHTML=''.
+// Из-за этого клик по Android-приложению в меню «Пуск» никогда не
+// доходил до обработчика, и приложение не запускалось.
 // ============================================================
 
 (function () {
@@ -449,11 +456,29 @@
             catch (err) {}
         }
 
+        // ============================================================
+        // FIX: меню «Пуск» и его подменю.
+        //
+        // Подменю .wm-start-submenu — это отдельный position:fixed
+        // элемент, аппендится в #wmRoot (НЕ внутрь #wmStartMenu).
+        // Поэтому startMenu.contains(t) для тапа на пункте подменю
+        // возвращает false, и раньше меню закрывалось прямо в
+        // touchend. closeStartMenu() → _hideStartSubmenu() →
+        // el.innerHTML = '' — пункт уничтожался ДО того, как
+        // WebView успевал доставить 'click'. Итог: 'click' по
+        // Android-приложению не срабатывал.
+        //
+        // Теперь: если тап пришёлся на подменю — не закрываем.
+        // ============================================================
         const startMenu = document.getElementById('wmStartMenu');
         const startBtn = document.getElementById('wmStartBtn');
+
+        const inStartMenu = startMenu && startMenu.contains(t);
+        const inStartBtn = startBtn && startBtn.contains(t);
+        const inSubmenu = t && t.closest && t.closest('.wm-start-submenu');
+
         if (startMenu && startMenu.classList.contains('open') &&
-            !startMenu.contains(t) &&
-            !(startBtn && startBtn.contains(t))) {
+            !inStartMenu && !inStartBtn && !inSubmenu) {
             try { FAR.WM && FAR.WM.closeStartMenu && FAR.WM.closeStartMenu(); }
             catch (err) {}
         }
