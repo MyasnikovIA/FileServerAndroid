@@ -4,6 +4,19 @@
     "host": "0.0.0.0"
   },
   "web": "www",
+  "autostart": {
+    "jsScripts": [
+      {
+        "url": "js/custom-startup.js"
+      }
+    ],
+    "wmApps": [
+      {
+        "id": "explorer",
+        "props": {}
+      }
+    ]
+  },
   "users": [
     {
       "name": "admin",

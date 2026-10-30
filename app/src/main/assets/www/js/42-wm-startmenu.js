@@ -2,7 +2,7 @@
 // 42-wm-startmenu.js — меню Пуск с категориями и подменю
 // ============================================================
 
-console.log('[StartMenu] VERSION 2026-10-30 v5 — remote desktop');
+console.log('[StartMenu] VERSION 2026-10-30 v6');
 
 FAR.WM.toggleStartMenu = function () {
     const sm = document.getElementById('wmStartMenu');
@@ -54,7 +54,7 @@ FAR.WM.APP_CATEGORY_MAP = {
     videochat: 'stream', broadcaster: 'stream',
     connect: 'system', gamepad: 'system',
     debug: 'system', log: 'system', console: 'system',
-    settings: 'system', 'default-launcher': 'system'
+    settings: 'system', 'default-launcher': 'system', 'autostart_settings': 'system'
 };
 
 FAR.WM._renderAppIcon = function (app, size) {
@@ -249,7 +249,7 @@ FAR.WM._renderStartMenu = function (query) {
     const list = document.getElementById('wmStartList');
     if (!list) return;
 
-    const HIDDEN_IN_START = { 'dbpick': true };
+    const HIDDEN_IN_START = { 'dbpick': true, 'autostart_settings': true };
     const apps = FAR.WM.getApps ? FAR.WM.getApps() : [];
     const q = (query || '').toLowerCase().trim();
 
@@ -339,9 +339,26 @@ FAR.WM._renderStartMenu = function (query) {
         list.appendChild(row);
     });
 
+    // Добавляем кнопку "Настройки автозапуска" в самый низ
+    const astBtn = document.createElement('div');
+    astBtn.className = 'wm-start-item';
+    astBtn.style.marginTop = '10px';
+    astBtn.style.borderTop = '1px solid #313244';
+    astBtn.innerHTML = '<span class="wm-si-emoji">🚀</span><span class="wm-si-label">Настройки автозапуска</span>';
+    astBtn.title = 'Управление автозапуском';
+    astBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        FAR.WM.closeStartMenu();
+        FAR.WM.openApp('autostart_settings');
+    });
+    list.appendChild(astBtn);
+
     if (!anyShown) {
-        list.innerHTML = '<div style="text-align:center;color:#6c7086;' +
-            'padding:20px;font-size:12px;">Нет приложений</div>';
+        const emptyMsg = document.createElement('div');
+        emptyMsg.style.cssText = 'text-align:center;color:#6c7086;padding:20px;font-size:12px;';
+        emptyMsg.textContent = 'Нет приложений';
+        list.insertBefore(emptyMsg, astBtn);
     }
 
     if (!list._wmSubmenuScrollBound) {
@@ -398,8 +415,7 @@ FAR.WM.logout = function () {
 };
 
 // ============================================================
-// ГЛОБАЛЬНЫЙ TOUCH LAUNCHER — устанавливается один раз.
-// Не зависит от click и от того, скрывается ли меню через display:none.
+// ГЛОБАЛЬНЫЙ TOUCH LAUNCHER
 // ============================================================
 
 (function installStartMenuTouchLauncher() {
@@ -423,10 +439,6 @@ FAR.WM.logout = function () {
             act:   item.getAttribute('data-launch-activity') || '',
             appId: item.getAttribute('data-app-id')       || ''
         };
-        if (window._farTouchStart.pkg || window._farTouchStart.appId) {
-            console.log('[StartMenu] touchstart captured: '
-                + (window._farTouchStart.pkg || window._farTouchStart.appId));
-        }
     }, { capture: true, passive: true });
 
     document.addEventListener('touchend', function (e) {
@@ -443,9 +455,6 @@ FAR.WM.logout = function () {
             window._farTouchStart = null;
             return;
         }
-
-        console.log('[StartMenu] JS tap launch: '
-            + (s.pkg || s.appId));
 
         if (s.pkg && window.AndroidBridge &&
             typeof window.AndroidBridge.launchApp === 'function') {

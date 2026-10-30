@@ -49,6 +49,13 @@ public class Config {
     public String ollamaBinary = "ollama";
     public String ollamaCwd = "";
 
+    // ============================================================
+    // АВТОЗАПУСК
+    // ============================================================
+    public JSONArray autostartAndroid = new JSONArray();
+    public JSONArray autostartJs = new JSONArray();
+    public JSONArray autostartWm = new JSONArray();
+
     public Map<String, User> users = new LinkedHashMap<>();
     public List<Share> shares = new ArrayList<>();
 
@@ -157,6 +164,21 @@ public class Config {
             String bin = ol.optString("binary", "ollama").trim();
             if (!bin.isEmpty()) cfg.ollamaBinary = bin;
             cfg.ollamaCwd = ol.optString("cwd", "").trim();
+        }
+
+        // ============================================================
+        // АВТОЗАПУСК
+        // ============================================================
+        JSONObject ast = root.optJSONObject("autostart");
+        if (ast != null) {
+            JSONArray apps = ast.optJSONArray("androidApps");
+            if (apps != null) cfg.autostartAndroid = apps;
+
+            JSONArray js = ast.optJSONArray("jsScripts");
+            if (js != null) cfg.autostartJs = js;
+
+            JSONArray wm = ast.optJSONArray("wmApps");
+            if (wm != null) cfg.autostartWm = wm;
         }
 
         JSONArray arrU = root.optJSONArray("users");

@@ -46,16 +46,17 @@ public class ApiHandler implements HttpHandler {
 
         try {
             switch (path) {
-                case "/api/info":    handleInfo(ex, method, session);      return;
-                case "/api/whoami":  handleWhoami(ex, method, session);    return;
-                case "/api/list":    handleList(ex, method, q, session);   return;
-                case "/api/stat":    handleStat(ex, method, q, session);   return;
-                case "/api/read":    handleRead(ex, method, q, session);   return;
-                case "/api/write":   handleWrite(ex, method, q, session);  return;
-                case "/api/mkdir":   handleMkdir(ex, method, q, session);  return;
-                case "/api/delete":  handleDelete(ex, method, q, session); return;
-                case "/api/move":    handleMove(ex, method, q, session);   return;
-                case "/api/copy":    handleCopy(ex, method, q, session);   return;
+                case "/api/info":      handleInfo(ex, method, session);      return;
+                case "/api/whoami":    handleWhoami(ex, method, session);    return;
+                case "/api/autostart": handleAutostart(ex, method);          return;
+                case "/api/list":      handleList(ex, method, q, session);   return;
+                case "/api/stat":      handleStat(ex, method, q, session);   return;
+                case "/api/read":      handleRead(ex, method, q, session);   return;
+                case "/api/write":     handleWrite(ex, method, q, session);  return;
+                case "/api/mkdir":     handleMkdir(ex, method, q, session);  return;
+                case "/api/delete":    handleDelete(ex, method, q, session); return;
+                case "/api/move":      handleMove(ex, method, q, session);   return;
+                case "/api/copy":      handleCopy(ex, method, q, session);   return;
                 default:
                     if (tryApiSharePath(ex, path)) return;
                     FileServer.sendError(ex, 404, "Unknown endpoint: " + path);
@@ -84,6 +85,18 @@ public class ApiHandler implements HttpHandler {
         }
     }
 
+    private void handleAutostart(HttpExchange ex, String method) throws Exception {
+        if (!"GET".equals(method)) {
+            FileServer.sendError(ex, 405, "Method not allowed");
+            return;
+        }
+        JSONObject resp = new JSONObject();
+        resp.put("androidApps", FileServer.config().autostartAndroid);
+        resp.put("jsScripts", FileServer.config().autostartJs);
+        resp.put("wmApps", FileServer.config().autostartWm);
+        FileServer.sendJson(ex, 200, resp.toString());
+    }
+
     private boolean tryApiSharePath(HttpExchange ex, String path) throws Exception {
         if (!path.startsWith("/api/")) return false;
         String after = path.substring("/api/".length());
@@ -92,15 +105,14 @@ public class ApiHandler implements HttpHandler {
         int slash = after.indexOf('/');
         String shareName = slash < 0 ? after : after.substring(0, slash);
 
-        // Защита от перехвата системных эндпоинтов и прокси
         if ("proxy".equals(shareName) || "login".equals(shareName) ||
                 "logout".equals(shareName) || "info".equals(shareName) ||
-                "whoami".equals(shareName) || "list".equals(shareName) ||
-                "stat".equals(shareName) || "read".equals(shareName) ||
-                "write".equals(shareName) || "mkdir".equals(shareName) ||
-                "delete".equals(shareName) || "move".equals(shareName) ||
-                "copy".equals(shareName) || "events".equals(shareName) ||
-                "public".equals(shareName)) {
+                "whoami".equals(shareName) || "autostart".equals(shareName) ||
+                "list".equals(shareName) || "stat".equals(shareName) ||
+                "read".equals(shareName) || "write".equals(shareName) ||
+                "mkdir".equals(shareName) || "delete".equals(shareName) ||
+                "move".equals(shareName) || "copy".equals(shareName) ||
+                "events".equals(shareName) || "public".equals(shareName)) {
             return false;
         }
 

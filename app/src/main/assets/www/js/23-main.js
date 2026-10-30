@@ -1,9 +1,6 @@
 // ============================================================
 // Точка входа: загрузка модалок, инициализация, автоподключение
 // ============================================================
-//
-// FIX 2026-10-30 v4: удалена модалка gpu-monitor.html.
-// ============================================================
 
 FAR.loadModalFragment = function(path) {
     try {
@@ -34,14 +31,12 @@ FAR.injectModals = function() {
         'modals/console.html',
         'modals/videochat-viewer.html',
         'modals/videochat-broadcaster.html',
-        // 'modals/nes-viewer.html',  <-- УДАЛЕНО
         'modals/emulator-viewer.html',
         'modals/pdf-viewer.html',
         'modals/lbrn2-viewer.html',
         'modals/gcode-viewer.html',
         'modals/browser.html',
         'modals/gamepad-setup.html',
-        // 'modals/gpu-monitor.html',  <-- УДАЛЕНО
         'modals/ollama.html',
         'modals/progress.html',
         'modals/loading.html',
@@ -147,6 +142,14 @@ document.addEventListener('DOMContentLoaded', async function() {
                     }, 200);
                 }
             }
+
+            // ============================================================
+            // ЗАПУСК АВТОЗАПУСКА
+            // ============================================================
+            if (typeof FAR.Autostart !== 'undefined') {
+                FAR.Autostart.run();
+            }
+
         } catch (e) {
             FAR.hideLoading();
             console.error('auto-connect error:', e);

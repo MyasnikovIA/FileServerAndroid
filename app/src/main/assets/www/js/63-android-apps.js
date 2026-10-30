@@ -218,6 +218,36 @@
                 FAR.toast('Обновлено приложений: ' + n, 'success');
             }
         });
+
+        // Внутри registerApps() при создании directLaunch:
+        FAR.WM.registerApp({
+            id: appId,
+            title: app.label || app.pkg,
+            icon: '📱',
+            keywords: (app.pkg || '') + ' ' + (app.label || ''),
+            iconImg: app.icon || null,
+            firstLetter: firstLetterOf(app.label, app.pkg),
+            firstLetterColor: colorFor(app.pkg),
+            androidPkg: app.pkg,
+            androidActivity: app.activity || '',
+            directLaunch: function () { launchApp(app.pkg, app.activity); },
+
+            // --- НОВОЕ ---
+            onContextMenu: function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const menu = document.getElementById('wmContextMenu');
+                if (!menu) return;
+                menu.innerHTML = '';
+
+                FAR.WM._addCtxItem(menu, '🚀 Добавить в автозапуск', function() {
+                    FAR.Autostart.addAndroidApp(app.pkg, app.activity || '', app.label);
+                });
+
+                FAR.WM._positionContextMenu(menu, e.clientX, e.clientY);
+            }
+        });
         if (FAR.WM.APP_CATEGORY_MAP) FAR.WM.APP_CATEGORY_MAP['android:refresh'] = 'android';
 
         console.log('[AndroidPrograms] зарегистрировано приложений: '

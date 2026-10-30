@@ -409,3 +409,80 @@ FAR.WM.registerApp({
         FAR.WM._mountLogUI(win);
     }
 });
+
+// ============================================================
+// Приложение: Настройки автозапуска
+// ============================================================
+
+FAR.WM.registerApp({
+    id: 'autostart_settings',
+    title: 'Настройки автозапуска',
+    icon: '🚀',
+    keywords: 'автозапуск autostart startup настройки',
+    singleton: true,
+    width: 700,
+    height: 550,
+    open: async function (win, props) {
+        win.bodyEl.innerHTML = '';
+        win.bodyEl.style.display = 'flex';
+        win.bodyEl.style.flexDirection = 'column';
+        win.bodyEl.style.background = '#1e1e2e';
+        win.bodyEl.style.color = '#cdd6f4';
+        win.bodyEl.style.padding = '16px';
+        win.bodyEl.style.overflowY = 'auto';
+
+        // Безопасное получение данных
+        let data = { androidApps: [], jsScripts: [], wmApps: [] };
+        if (window.FAR && FAR.Autostart && typeof FAR.Autostart._getLocal === 'function') {
+            data = FAR.Autostart._getLocal();
+        }
+
+        let html = `
+            <h3 style="margin-top:0; color:#89b4fa;">Настройки автозапуска (клиент)</h3>
+            <p style="font-size:12px;color:#a6adc8;">Эти настройки применяются только к текущему браузеру/устройству. Серверные настройки (config.json) применяются ко всем.</p>
+
+            <h4 style="color:#a6e3a1;">JS Скрипты</h4>
+            <div style="margin-bottom:16px;">
+                ${(data.jsScripts || []).map(s => `<div style="background:#313244;padding:8px;margin-bottom:4px;border-radius:4px;">${FAR.escapeHtml(s.name || s.url || 'Inline Script')}</div>`).join('') || '<div style="color:#6c7086;font-size:12px;">Нет скриптов</div>'}
+            </div>
+
+            <h4 style="color:#a6e3a1;">Android Приложения</h4>
+            <div style="margin-bottom:16px;">
+                ${(data.androidApps || []).map(a => `<div style="background:#313244;padding:8px;margin-bottom:4px;border-radius:4px;display:flex;justify-content:space-between;align-items:center;">
+                    <span>${FAR.escapeHtml(a.label || a.pkg)}</span>
+                    <button class="btn-del-ast" data-pkg="${a.pkg}" data-act="${a.act || ''}" style="background:#f38ba8;color:#1e1e2e;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-weight:bold;">Удалить</button>
+                </div>`).join('') || '<div style="color:#6c7086;font-size:12px;">Нет приложений</div>'}
+            </div>
+
+            <h4 style="color:#a6e3a1;">WM Приложения</h4>
+            <div>
+                ${(data.wmApps || []).map(w => `<div style="background:#313244;padding:8px;margin-bottom:4px;border-radius:4px;display:flex;justify-content:space-between;align-items:center;">
+                    <span>${FAR.escapeHtml(w.title || w.id)}</span>
+                    <button class="btn-del-wm" data-id="${w.id}" style="background:#f38ba8;color:#1e1e2e;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-weight:bold;">Удалить</button>
+                </div>`).join('') || '<div style="color:#6c7086;font-size:12px;">Нет приложений</div>'}
+            </div>
+        `;
+
+        win.bodyEl.innerHTML = html;
+
+        win.bodyEl.querySelectorAll('.btn-del-ast').forEach(btn => {
+            btn.onclick = function() {
+                if (window.FAR && FAR.Autostart && typeof FAR.Autostart.removeAndroidApp === 'function') {
+                    FAR.Autostart.removeAndroidApp(this.dataset.pkg, this.dataset.act);
+                }
+                FAR.WM.openApp('autostart_settings'); // Перезагрузка окна
+            };
+        });
+
+        win.bodyEl.querySelectorAll('.btn-del-wm').forEach(btn => {
+            btn.onclick = function() {
+                if (window.FAR && FAR.Autostart) {
+                    const d = FAR.Autostart._getLocal();
+                    d.wmApps = (d.wmApps || []).filter(w => w.id !== this.dataset.id);
+                    FAR.Autostart._saveLocal(d);
+                }
+                FAR.WM.openApp('autostart_settings');
+            };
+        });
+    }
+});

@@ -1,13 +1,9 @@
 // ============================================================
 // 43-wm-desktop.js — рабочий стол: иконки, drag, контекстное меню
 // ============================================================
-//
-// FIX 2026-10-30 v4: удалено приложение "Загрузка GPU".
-// ============================================================
 
 FAR.WM.LS_ICONS_KEY = 'filebd_wm_desktop_icons';
 
-// Всегда отображаемые приложения
 FAR.WM.DESKTOP_DEFAULT = [
     { id: 'explorer',   x: 20,  y: 20  },
     { id: 'viewer',     x: 20,  y: 130 },
@@ -21,14 +17,12 @@ FAR.WM.DESKTOP_DEFAULT = [
     { id: 'browser',    x: 240, y: 130 }
 ];
 
-// Условные приложения
 FAR.WM.DESKTOP_CONDITIONAL = [
     { id: 'console',     x: 240, y: 240 },
     { id: 'hermes',      x: 240, y: 460 },
     { id: 'videochat',   x: 240, y: 350 },
     { id: 'broadcaster', x: 350, y: 20  }
 ];
-
 
 FAR.WM._loadDesktopIcons = function () {
     try {
@@ -70,8 +64,6 @@ FAR.WM._renderDesktopIcons = function () {
     const container = document.getElementById('wmDesktopIcons');
     if (!container) return;
 
-    const HIDDEN_ON_DESKTOP = { 'dbpick': true };
-
     let layout = FAR.WM._loadDesktopIcons();
     let changed = false;
 
@@ -79,15 +71,9 @@ FAR.WM._renderDesktopIcons = function () {
         layout = FAR.WM.DESKTOP_DEFAULT.slice();
         changed = true;
     } else {
-        const filtered = layout.filter(function (entry) {
-            return entry && entry.id && !HIDDEN_ON_DESKTOP[entry.id];
-        });
-        if (filtered.length !== layout.length) changed = true;
-        layout = filtered;
-
+        // Восстанавливаем недостающие стандартные иконки, НО НЕ УДАЛЯЕМ существующие
         const existingIds = new Set(layout.map(function (e) { return e.id; }));
         FAR.WM.DESKTOP_DEFAULT.forEach(function (def) {
-            if (HIDDEN_ON_DESKTOP[def.id]) return;
             if (existingIds.has(def.id)) return;
             layout.push({ id: def.id, x: def.x, y: def.y });
             existingIds.add(def.id);
@@ -107,8 +93,7 @@ FAR.WM._renderDesktopIcons = function () {
 
     layout.forEach(function (entry, idx) {
         const app = FAR.WM.getApp ? FAR.WM.getApp(entry.id) : null;
-        if (!app) return;
-        if (HIDDEN_ON_DESKTOP[entry.id]) return;
+        if (!app) return; // Пропускаем только несуществующие ID
 
         const el = document.createElement('div');
         el.className = 'wm-desktop-icon';
@@ -116,31 +101,81 @@ FAR.WM._renderDesktopIcons = function () {
         el.style.top  = entry.y + 'px';
         el.dataset.appId = entry.id;
         el.dataset.iconIndex = idx;
+
         el.innerHTML =
-            '<span class="wm-di-emoji">' + FAR.escapeHtml(app.icon || '📦') + '</span>' +
+            '<span class="wm-di-emoji">' + FAR.WM._renderAppIcon(app, 48) + '</span>' +
             '<span class="wm-di-label">' + FAR.escapeHtml(app.title) + '</span>';
 
         el.addEventListener('dblclick', function () {
-            FAR.WM.openApp(entry.id);
+            FAR.WM._invokeApp(app);
         });
 
-        el.addEventListener('mousedown', function (e) {
+        // Обработка нажатия (и мышь, и тачскрин)
+        el.addEventListener('pointerdown', function (e) {
+            if (e.button !== 0 && e.pointerType === 'mouse') return; // Игнорируем правую кнопку мыши
+
             e.stopPropagation();
             document.querySelectorAll('.wm-desktop-icon.selected').forEach(function (x) {
                 x.classList.remove('selected');
             });
             el.classList.add('selected');
-        });
 
-        el.addEventListener('mousedown', function (e) {
-            if (e.button !== 0) return;
-            FAR.WM._startIconDrag(e, el, idx);
-        });
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const origLeft = parseInt(el.style.left, 10) || 0;
+            const origTop  = parseInt(el.style.top, 10)  || 0;
+            let moved = false;
+            let longPressTriggered = false;
 
-        el.addEventListener('contextmenu', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            FAR.WM._showIconContextMenu(e.clientX, e.clientY, entry.id);
+            // Таймер долгого нажатия (500 мс) для открытия контекстного меню
+            const longPressTimer = setTimeout(function () {
+                longPressTriggered = true;
+                FAR.WM._showIconContextMenu(startX, startY, entry.id);
+                if (navigator.vibrate) { try { navigator.vibrate(30); } catch (err) {} }
+            }, 500);
+
+            const onMove = function (ev) {
+                if (longPressTriggered) return;
+
+                const dx = ev.clientX - startX;
+                const dy = ev.clientY - startY;
+
+                // Если сдвинули больше чем на 5 пикселей — отменяем долгое нажатие и начинаем drag
+                if (!moved && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+                    clearTimeout(longPressTimer);
+                    moved = true;
+                    el.classList.add('dragging');
+                }
+
+                if (!moved) return;
+
+                const nx = Math.max(0, origLeft + dx);
+                const ny = Math.max(0, origTop + dy);
+                el.style.left = nx + 'px';
+                el.style.top  = ny + 'px';
+            };
+
+            const onUp = function () {
+                clearTimeout(longPressTimer);
+                document.removeEventListener('pointermove', onMove);
+                document.removeEventListener('pointerup', onUp);
+                el.classList.remove('dragging');
+
+                if (longPressTriggered) return;
+
+                if (moved) {
+                    const l = FAR.WM._loadDesktopIcons() || FAR.WM.DESKTOP_DEFAULT.slice();
+                    const curEntry = l[idx];
+                    if (curEntry) {
+                        curEntry.x = parseInt(el.style.left, 10) || 0;
+                        curEntry.y = parseInt(el.style.top, 10)  || 0;
+                        FAR.WM._saveDesktopIcons(l);
+                    }
+                }
+            };
+
+            document.addEventListener('pointermove', onMove);
+            document.addEventListener('pointerup', onUp);
         });
 
         container.appendChild(el);
@@ -156,52 +191,6 @@ FAR.WM._scheduleDesktopRender = function () {
             catch (e) { console.warn('[WM] renderDesktopIcons:', e); }
         }
     }, 50);
-};
-
-// ============================================================
-// Перетаскивание иконки
-// ============================================================
-
-FAR.WM._startIconDrag = function (e, el, idx) {
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const origLeft = parseInt(el.style.left, 10) || 0;
-    const origTop  = parseInt(el.style.top, 10)  || 0;
-    let moved = false;
-
-    const onMove = function (ev) {
-        const dx = ev.clientX - startX;
-        const dy = ev.clientY - startY;
-        if (!moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
-            moved = true;
-            el.classList.add('dragging');
-        }
-        if (!moved) return;
-
-        const nx = Math.max(0, origLeft + dx);
-        const ny = Math.max(0, origTop + dy);
-        el.style.left = nx + 'px';
-        el.style.top  = ny + 'px';
-    };
-
-    const onUp = function () {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        el.classList.remove('dragging');
-
-        if (moved) {
-            const layout = FAR.WM._loadDesktopIcons() || FAR.WM.DESKTOP_DEFAULT.slice();
-            const entry = layout[idx];
-            if (entry) {
-                entry.x = parseInt(el.style.left, 10) || 0;
-                entry.y = parseInt(el.style.top, 10)  || 0;
-                FAR.WM._saveDesktopIcons(layout);
-            }
-        }
-    };
-
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
 };
 
 // ============================================================
@@ -225,6 +214,9 @@ FAR.WM._showDesktopContextMenu = function (x, y) {
     });
     FAR.WM._addCtxItem(menu, '🎮 Настройка джойстика', function () {
         FAR.WM.openApp('gamepad');
+    });
+    FAR.WM._addCtxItem(menu, '🚀 Настройки автозапуска', function () {
+        FAR.WM.openApp('autostart_settings');
     });
 
     if (typeof FAR.WMWallpaper !== 'undefined') {
@@ -257,12 +249,21 @@ FAR.WM._showIconContextMenu = function (x, y, appId) {
     if (!menu) return;
     menu.innerHTML = '';
 
+    const app = FAR.WM.getApp(appId);
+
     FAR.WM._addCtxItem(menu, '📂 Открыть', function () {
-        FAR.WM.openApp(appId);
+        if (app) FAR.WM._invokeApp(app);
     });
-    FAR.WM._addCtxItem(menu, '🪟 Открыть в новом окне', function () {
-        FAR.WM.openApp(appId, { forceNew: true });
-    });
+
+    if (app && window.FAR && FAR.Autostart) {
+        FAR.WM._addCtxItem(menu, '🚀 Добавить в автозапуск', function () {
+            if (app.androidPkg) {
+                FAR.Autostart.addAndroidApp(app.androidPkg, app.androidActivity || '', app.title);
+            } else {
+                FAR.Autostart.addWmApp(app.id, app.title);
+            }
+        });
+    }
 
     FAR.WM._positionContextMenu(menu, x, y);
 };
@@ -322,23 +323,15 @@ FAR.WM._bindDesktopUI = function () {
     if (!desktop || desktop._wmBound) return;
     desktop._wmBound = true;
 
-    desktop.addEventListener('mousedown', function (e) {
+    desktop.addEventListener('pointerdown', function (e) {
         if (e.target === desktop || e.target.classList.contains('wm-desktop-icons')) {
             document.querySelectorAll('.wm-desktop-icon.selected').forEach(function (x) {
                 x.classList.remove('selected');
             });
         }
     });
-
-    desktop.addEventListener('contextmenu', function (e) {
-        if (e.target.closest('.wm-window')) return;
-        if (e.target.closest('.wm-desktop-icon')) return;
-        e.preventDefault();
-        FAR.WM._showDesktopContextMenu(e.clientX, e.clientY);
-    });
 };
 
-// Расширяем enter — добавим привязку и рендер после входа
 FAR.WM._origEnter2 = FAR.WM.enter;
 FAR.WM.enter = function () {
     FAR.WM._origEnter2.apply(this, arguments);

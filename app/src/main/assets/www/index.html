@@ -2,9 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-
     <title>FAR-менеджер — FileServer</title>
 
     <script src="lib/jszip/jszip.min.js"></script>
@@ -60,7 +58,6 @@
     <button onclick="FAR.openVideoChat()" id="btnVideoChat" title="Смотреть трансляцию" style="display:none;">📺 Трансляция</button>
     <button onclick="FAR.openBroadcaster()" id="btnBroadcast" title="Начать трансляцию с камеры" style="display:none;">🎥 Вещать</button>
 
-    <!-- Кнопка смены сервера -->
     <button onclick="FAR.openConnModal(false)" id="btnServer" title="Сменить текущий сервер" style="background:#cba6f7;color:#1e1e2e;">🗄️ Сервер</button>
     <button onclick="FAR.onAuthButton()" class="btn-auth" id="btnAuth" title="Войти / Выйти">🔐 LogIn</button>
 
@@ -198,5 +195,7 @@
 <script src="js/61-open-in-tab.js"></script>
 <script src="js/62-touch-adapter.js"></script>
 <script src="js/63-android-apps.js"></script>
+<script src="js/64-autostart.js"></script>
+
 </body>
 </html>
