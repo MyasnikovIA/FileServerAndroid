@@ -2,7 +2,7 @@
 // 42-wm-startmenu.js — меню Пуск с категориями и подменю
 // ============================================================
 
-console.log('[StartMenu] VERSION 2026-10-30 v6');
+console.log('[StartMenu] VERSION 2026-10-30 v7');
 
 FAR.WM.toggleStartMenu = function () {
     const sm = document.getElementById('wmStartMenu');
@@ -344,11 +344,13 @@ FAR.WM._renderStartMenu = function (query) {
     astBtn.className = 'wm-start-item';
     astBtn.style.marginTop = '10px';
     astBtn.style.borderTop = '1px solid #313244';
+    astBtn.style.flexShrink = '0'; // Не сжимать
     astBtn.innerHTML = '<span class="wm-si-emoji">🚀</span><span class="wm-si-label">Настройки автозапуска</span>';
     astBtn.title = 'Управление автозапуском';
     astBtn.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
+        console.log('[StartMenu] Clicked Autostart Settings');
         FAR.WM.closeStartMenu();
         FAR.WM.openApp('autostart_settings');
     });

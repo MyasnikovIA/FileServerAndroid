@@ -2,6 +2,8 @@
 // 64-autostart.js — Автозапуск приложений и скриптов
 // ============================================================
 
+console.log('[Autostart] Module loaded');
+
 FAR.Autostart = {
     LS_KEY: 'filebd_autostart_data',
 
@@ -21,7 +23,9 @@ FAR.Autostart = {
         let serverCfg = { androidApps: [], jsScripts: [], wmApps: [] };
         try {
             const res = await fetch('/api/autostart');
-            if (res.ok) serverCfg = await res.json();
+            if (res.ok) {
+                serverCfg = await res.json();
+            }
         } catch(e) {
             console.warn('[Autostart] Failed to fetch server config:', e);
         }
@@ -38,6 +42,7 @@ FAR.Autostart = {
     run: async function() {
         console.log('[Autostart] Starting boot sequence...');
         const cfg = await this.getConfig();
+        console.log('[Autostart] Config loaded:', cfg);
 
         // 1. Выполнение JS-скриптов
         for (const script of cfg.jsScripts) {
@@ -60,21 +65,23 @@ FAR.Autostart = {
                 try {
                     window.AndroidBridge.launchApp(app.pkg, app.act || '');
                     console.log('[Autostart] Launched Android app:', app.pkg);
-                } catch(e) {}
+                } catch(e) { console.warn('[Autostart] Failed to launch app:', app.pkg, e); }
             }
         }
 
-        // 3. Открытие окон WM (если включен оконный режим)
+        // 3. Открытие окон WM
         if (typeof FAR.WM !== 'undefined') {
             for (const w of cfg.wmApps) {
                 try {
                     FAR.WM.openApp(w.id, { props: w.props || {} });
                     console.log('[Autostart] Opened WM app:', w.id);
-                } catch(e) {}
+                } catch(e) { console.warn('[Autostart] Failed to open WM app:', w.id, e); }
             }
         }
         console.log('[Autostart] Boot sequence complete.');
     },
+
+    // --- Методы добавления ---
 
     addAndroidApp: function(pkg, act, label) {
         const data = this._getLocal();
@@ -104,11 +111,43 @@ FAR.Autostart = {
         FAR.toast('Добавлено в автозапуск: ' + title, 'success');
     },
 
+    addJsScript: function(url, name) {
+        const data = this._getLocal();
+        if (!data.jsScripts) data.jsScripts = [];
+
+        if (data.jsScripts.some(s => s.url === url)) {
+            FAR.toast('Скрипт уже в автозапуске', 'info');
+            return;
+        }
+
+        data.jsScripts.push({ url: url, name: name || url });
+        this._saveLocal(data);
+        FAR.toast('Скрипт добавлен в автозапуск', 'success');
+    },
+
+    // --- Методы удаления ---
+
     removeAndroidApp: function(pkg, act) {
         const data = this._getLocal();
         if (!data.androidApps) return;
         data.androidApps = data.androidApps.filter(a => !(a.pkg === pkg && a.act === act));
         this._saveLocal(data);
         FAR.toast('Удалено из автозапуска', 'info');
+    },
+
+    removeWmApp: function(id) {
+        const data = this._getLocal();
+        if (!data.wmApps) return;
+        data.wmApps = data.wmApps.filter(w => w.id !== id);
+        this._saveLocal(data);
+        FAR.toast('Удалено из автозапуска', 'info');
+    },
+
+    removeJsScript: function(url) {
+        const data = this._getLocal();
+        if (!data.jsScripts) return;
+        data.jsScripts = data.jsScripts.filter(s => s.url !== url);
+        this._saveLocal(data);
+        FAR.toast('Скрипт удален из автозапуска', 'info');
     }
 };

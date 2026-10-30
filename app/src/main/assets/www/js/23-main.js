@@ -97,6 +97,16 @@ document.addEventListener('DOMContentLoaded', async function() {
         FAR.restoreAuthTokenFromCookie();
     }
 
+    // ============================================================
+    // ЗАПУСК АВТОЗАПУСКА (ВСЕГДА, ДО ПОДКЛЮЧЕНИЯ К БД)
+    // ============================================================
+    if (typeof FAR.Autostart !== 'undefined') {
+        setTimeout(() => {
+            FAR.Autostart.run();
+        }, 1500);
+    }
+
+    // Далее логика подключения...
     const savedGlobal = FAR.loadConnFromLS();
     const savedLeft   = (typeof FAR.loadSideConnFromLS === 'function')
         ? FAR.loadSideConnFromLS('left')  : null;
@@ -142,14 +152,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                     }, 200);
                 }
             }
-
-            // ============================================================
-            // ЗАПУСК АВТОЗАПУСКА
-            // ============================================================
-            if (typeof FAR.Autostart !== 'undefined') {
-                FAR.Autostart.run();
-            }
-
         } catch (e) {
             FAR.hideLoading();
             console.error('auto-connect error:', e);

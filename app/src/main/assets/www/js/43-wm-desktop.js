@@ -71,7 +71,6 @@ FAR.WM._renderDesktopIcons = function () {
         layout = FAR.WM.DESKTOP_DEFAULT.slice();
         changed = true;
     } else {
-        // Восстанавливаем недостающие стандартные иконки, НО НЕ УДАЛЯЕМ существующие
         const existingIds = new Set(layout.map(function (e) { return e.id; }));
         FAR.WM.DESKTOP_DEFAULT.forEach(function (def) {
             if (existingIds.has(def.id)) return;
@@ -93,7 +92,7 @@ FAR.WM._renderDesktopIcons = function () {
 
     layout.forEach(function (entry, idx) {
         const app = FAR.WM.getApp ? FAR.WM.getApp(entry.id) : null;
-        if (!app) return; // Пропускаем только несуществующие ID
+        if (!app) return;
 
         const el = document.createElement('div');
         el.className = 'wm-desktop-icon';
@@ -110,9 +109,8 @@ FAR.WM._renderDesktopIcons = function () {
             FAR.WM._invokeApp(app);
         });
 
-        // Обработка нажатия (и мышь, и тачскрин)
         el.addEventListener('pointerdown', function (e) {
-            if (e.button !== 0 && e.pointerType === 'mouse') return; // Игнорируем правую кнопку мыши
+            if (e.button !== 0 && e.pointerType === 'mouse') return;
 
             e.stopPropagation();
             document.querySelectorAll('.wm-desktop-icon.selected').forEach(function (x) {
@@ -127,7 +125,6 @@ FAR.WM._renderDesktopIcons = function () {
             let moved = false;
             let longPressTriggered = false;
 
-            // Таймер долгого нажатия (500 мс) для открытия контекстного меню
             const longPressTimer = setTimeout(function () {
                 longPressTriggered = true;
                 FAR.WM._showIconContextMenu(startX, startY, entry.id);
@@ -136,11 +133,9 @@ FAR.WM._renderDesktopIcons = function () {
 
             const onMove = function (ev) {
                 if (longPressTriggered) return;
-
                 const dx = ev.clientX - startX;
                 const dy = ev.clientY - startY;
 
-                // Если сдвинули больше чем на 5 пикселей — отменяем долгое нажатие и начинаем drag
                 if (!moved && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
                     clearTimeout(longPressTimer);
                     moved = true;
@@ -323,11 +318,37 @@ FAR.WM._bindDesktopUI = function () {
     if (!desktop || desktop._wmBound) return;
     desktop._wmBound = true;
 
+    let startX = 0, startY = 0, longPressTimer = null;
+
+    // Обработка долгого нажатия на ПУСТОМ месте рабочего стола
     desktop.addEventListener('pointerdown', function (e) {
-        if (e.target === desktop || e.target.classList.contains('wm-desktop-icons')) {
-            document.querySelectorAll('.wm-desktop-icon.selected').forEach(function (x) {
-                x.classList.remove('selected');
-            });
+        if (e.button !== 0 && e.pointerType === 'mouse') return; // Игнорируем правую кнопку
+        if (e.target.closest('.wm-window') || e.target.closest('.wm-desktop-icon')) return;
+
+        startX = e.clientX;
+        startY = e.clientY;
+
+        longPressTimer = setTimeout(function () {
+            longPressTimer = null;
+            FAR.WM._showDesktopContextMenu(startX, startY);
+            if (navigator.vibrate) { try { navigator.vibrate(30); } catch(err) {} }
+        }, 500);
+    });
+
+    desktop.addEventListener('pointermove', function (e) {
+        if (!longPressTimer) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+    });
+
+    desktop.addEventListener('pointerup', function () {
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
         }
     });
 };

@@ -65,7 +65,7 @@ FAR.WM.openApp = async function (appId, opts) {
         props: Object.assign({}, def.defaultProps || {}, opts.props || {}),
         onClose: function (w) {
             if (typeof def.onClose === 'function') {
-                try { def.onClose(w); } catch (e) { console.warn('[WM app onClose]', e); }
+                try { def.onClose(w); } catch (e) { console.warn('[WM app onClose]', appId, e); }
             }
         }
     });
@@ -421,7 +421,7 @@ FAR.WM.registerApp({
     keywords: 'автозапуск autostart startup настройки',
     singleton: true,
     width: 700,
-    height: 550,
+    height: 650,
     open: async function (win, props) {
         win.bodyEl.innerHTML = '';
         win.bodyEl.style.display = 'flex';
@@ -431,58 +431,118 @@ FAR.WM.registerApp({
         win.bodyEl.style.padding = '16px';
         win.bodyEl.style.overflowY = 'auto';
 
-        // Безопасное получение данных
-        let data = { androidApps: [], jsScripts: [], wmApps: [] };
-        if (window.FAR && FAR.Autostart && typeof FAR.Autostart._getLocal === 'function') {
-            data = FAR.Autostart._getLocal();
-        }
+        const render = function() {
+            let data = { androidApps: [], jsScripts: [], wmApps: [] };
+            if (window.FAR && FAR.Autostart) {
+                data = FAR.Autostart._getLocal();
+            }
 
-        let html = `
-            <h3 style="margin-top:0; color:#89b4fa;">Настройки автозапуска (клиент)</h3>
-            <p style="font-size:12px;color:#a6adc8;">Эти настройки применяются только к текущему браузеру/устройству. Серверные настройки (config.json) применяются ко всем.</p>
+            // Получаем списки доступных приложений для добавления
+            const availableWM = FAR.WM.getApps().filter(a => a.id !== 'autostart_settings' && a.id !== 'dbpick');
+            const availableAndroid = (FAR.AndroidPrograms && FAR.AndroidPrograms.apps) ? FAR.AndroidPrograms.apps : [];
 
-            <h4 style="color:#a6e3a1;">JS Скрипты</h4>
-            <div style="margin-bottom:16px;">
-                ${(data.jsScripts || []).map(s => `<div style="background:#313244;padding:8px;margin-bottom:4px;border-radius:4px;">${FAR.escapeHtml(s.name || s.url || 'Inline Script')}</div>`).join('') || '<div style="color:#6c7086;font-size:12px;">Нет скриптов</div>'}
-            </div>
+            let html = `
+                <h3 style="margin-top:0; color:#89b4fa;">Настройки автозапуска (клиент)</h3>
+                <p style="font-size:12px;color:#a6adc8;">Эти настройки применяются только к текущему устройству. Серверные настройки (config.json) применяются ко всем.</p>
 
-            <h4 style="color:#a6e3a1;">Android Приложения</h4>
-            <div style="margin-bottom:16px;">
-                ${(data.androidApps || []).map(a => `<div style="background:#313244;padding:8px;margin-bottom:4px;border-radius:4px;display:flex;justify-content:space-between;align-items:center;">
-                    <span>${FAR.escapeHtml(a.label || a.pkg)}</span>
-                    <button class="btn-del-ast" data-pkg="${a.pkg}" data-act="${a.act || ''}" style="background:#f38ba8;color:#1e1e2e;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-weight:bold;">Удалить</button>
-                </div>`).join('') || '<div style="color:#6c7086;font-size:12px;">Нет приложений</div>'}
-            </div>
+                <!-- JS СКРИПТЫ -->
+                <div style="background:#181825; padding:12px; border-radius:6px; margin-bottom:16px;">
+                    <h4 style="margin-top:0; color:#a6e3a1;">JS Скрипты</h4>
+                    <div style="display:flex; gap:8px; margin-bottom:12px;">
+                        <input type="text" id="astAddJsUrl" placeholder="URL (напр. js/custom.js)" style="flex:1; padding:6px 10px; background:#313244; border:1px solid #45475a; border-radius:4px; color:#cdd6f4; font-size:12px;">
+                        <button id="astBtnAddJs" style="padding:6px 12px; background:#a6e3a1; color:#1e1e2e; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Добавить</button>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                        ${(data.jsScripts || []).map(s => `<div style="display:flex; justify-content:space-between; align-items:center; background:#313244; padding:6px 10px; border-radius:4px;">
+                            <span style="font-family:monospace; font-size:12px;">${FAR.escapeHtml(s.name || s.url)}</span>
+                            <button class="ast-del-js" data-url="${s.url}" style="background:#f38ba8; color:#1e1e2e; border:none; padding:2px 8px; border-radius:4px; cursor:pointer;">✕</button>
+                        </div>`).join('') || '<div style="color:#6c7086;font-size:12px;">Нет скриптов</div>'}
+                    </div>
+                </div>
 
-            <h4 style="color:#a6e3a1;">WM Приложения</h4>
-            <div>
-                ${(data.wmApps || []).map(w => `<div style="background:#313244;padding:8px;margin-bottom:4px;border-radius:4px;display:flex;justify-content:space-between;align-items:center;">
-                    <span>${FAR.escapeHtml(w.title || w.id)}</span>
-                    <button class="btn-del-wm" data-id="${w.id}" style="background:#f38ba8;color:#1e1e2e;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-weight:bold;">Удалить</button>
-                </div>`).join('') || '<div style="color:#6c7086;font-size:12px;">Нет приложений</div>'}
-            </div>
-        `;
+                <!-- WM ПРИЛОЖЕНИЯ -->
+                <div style="background:#181825; padding:12px; border-radius:6px; margin-bottom:16px;">
+                    <h4 style="margin-top:0; color:#a6e3a1;">Приложения FileServer</h4>
+                    <div style="display:flex; gap:8px; margin-bottom:12px;">
+                        <select id="astAddWmSelect" style="flex:1; padding:6px 10px; background:#313244; border:1px solid #45475a; border-radius:4px; color:#cdd6f4; font-size:12px;">
+                            <option value="">-- Выберите приложение --</option>
+                            ${availableWM.map(a => `<option value="${a.id}">${a.title}</option>`).join('')}
+                        </select>
+                        <button id="astBtnAddWm" style="padding:6px 12px; background:#a6e3a1; color:#1e1e2e; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Добавить</button>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                        ${(data.wmApps || []).map(w => `<div style="display:flex; justify-content:space-between; align-items:center; background:#313244; padding:6px 10px; border-radius:4px;">
+                            <span style="font-size:12px;">${FAR.escapeHtml(w.title || w.id)}</span>
+                            <button class="ast-del-wm" data-id="${w.id}" style="background:#f38ba8; color:#1e1e2e; border:none; padding:2px 8px; border-radius:4px; cursor:pointer;">✕</button>
+                        </div>`).join('') || '<div style="color:#6c7086;font-size:12px;">Нет приложений</div>'}
+                    </div>
+                </div>
 
-        win.bodyEl.innerHTML = html;
+                <!-- ANDROID ПРИЛОЖЕНИЯ -->
+                <div style="background:#181825; padding:12px; border-radius:6px;">
+                    <h4 style="margin-top:0; color:#a6e3a1;">Android Приложения</h4>
+                    <div style="display:flex; gap:8px; margin-bottom:12px;">
+                        <select id="astAddAndroidSelect" style="flex:1; padding:6px 10px; background:#313244; border:1px solid #45475a; border-radius:4px; color:#cdd6f4; font-size:12px;">
+                            <option value="">-- Выберите приложение --</option>
+                            ${availableAndroid.map(a => `<option value="${a.pkg}|${a.activity}">${a.label}</option>`).join('')}
+                        </select>
+                        <button id="astBtnAddAndroid" style="padding:6px 12px; background:#a6e3a1; color:#1e1e2e; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Добавить</button>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                        ${(data.androidApps || []).map(a => `<div style="display:flex; justify-content:space-between; align-items:center; background:#313244; padding:6px 10px; border-radius:4px;">
+                            <span style="font-size:12px;">${FAR.escapeHtml(a.label || a.pkg)}</span>
+                            <button class="ast-del-android" data-pkg="${a.pkg}" data-act="${a.act || ''}" style="background:#f38ba8; color:#1e1e2e; border:none; padding:2px 8px; border-radius:4px; cursor:pointer;">✕</button>
+                        </div>`).join('') || '<div style="color:#6c7086;font-size:12px;">Нет приложений</div>'}
+                    </div>
+                </div>
+            `;
 
-        win.bodyEl.querySelectorAll('.btn-del-ast').forEach(btn => {
-            btn.onclick = function() {
-                if (window.FAR && FAR.Autostart && typeof FAR.Autostart.removeAndroidApp === 'function') {
-                    FAR.Autostart.removeAndroidApp(this.dataset.pkg, this.dataset.act);
+            win.bodyEl.innerHTML = html;
+
+            // Обработчики JS
+            win.bodyEl.querySelector('#astBtnAddJs').onclick = () => {
+                const url = win.bodyEl.querySelector('#astAddJsUrl').value.trim();
+                if (url) {
+                    FAR.Autostart.addJsScript(url, url);
+                    render();
                 }
-                FAR.WM.openApp('autostart_settings'); // Перезагрузка окна
             };
-        });
+            win.bodyEl.querySelectorAll('.ast-del-js').forEach(btn => {
+                btn.onclick = () => { FAR.Autostart.removeJsScript(btn.dataset.url); render(); };
+            });
 
-        win.bodyEl.querySelectorAll('.btn-del-wm').forEach(btn => {
-            btn.onclick = function() {
-                if (window.FAR && FAR.Autostart) {
-                    const d = FAR.Autostart._getLocal();
-                    d.wmApps = (d.wmApps || []).filter(w => w.id !== this.dataset.id);
-                    FAR.Autostart._saveLocal(d);
+            // Обработчики WM
+            win.bodyEl.querySelector('#astBtnAddWm').onclick = () => {
+                const sel = win.bodyEl.querySelector('#astAddWmSelect');
+                const id = sel.value;
+                if (id) {
+                    const app = FAR.WM.getApp(id);
+                    FAR.Autostart.addWmApp(id, app ? app.title : id);
+                    render();
                 }
-                FAR.WM.openApp('autostart_settings');
             };
-        });
+            win.bodyEl.querySelectorAll('.ast-del-wm').forEach(btn => {
+                btn.onclick = () => { FAR.Autostart.removeWmApp(btn.dataset.id); render(); };
+            });
+
+            // Обработчики Android
+            win.bodyEl.querySelector('#astBtnAddAndroid').onclick = () => {
+                const sel = win.bodyEl.querySelector('#astAddAndroidSelect');
+                const val = sel.value;
+                if (val) {
+                    const parts = val.split('|');
+                    const pkg = parts[0];
+                    const act = parts[1] || '';
+                    const app = availableAndroid.find(a => a.pkg === pkg && a.activity === act);
+                    FAR.Autostart.addAndroidApp(pkg, act, app ? app.label : pkg);
+                    render();
+                }
+            };
+            win.bodyEl.querySelectorAll('.ast-del-android').forEach(btn => {
+                btn.onclick = () => { FAR.Autostart.removeAndroidApp(btn.dataset.pkg, btn.dataset.act); render(); };
+            });
+        };
+
+        render();
     }
 });
