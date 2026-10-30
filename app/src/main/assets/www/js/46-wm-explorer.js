@@ -260,6 +260,7 @@ FAR.WM._mountExplorerPanel = async function (win, props) {
 
             if (!dragging) return;
 
+            // 1. Проверяем внешние drop-target'ы (например, Ollama)
             const ext = (typeof FAR._findExternalDropTarget === 'function')
                 ? FAR._findExternalDropTarget(ev.clientX, ev.clientY)
                 : null;
@@ -267,11 +268,11 @@ FAR.WM._mountExplorerPanel = async function (win, props) {
             if (ext && FAR.WM._dragPayload && typeof ext.acceptDrop === 'function') {
                 const payload = FAR.WM._dragPayload;
                 const items = payload.items.slice();
-                const srcSide = payload.sourceSide;
+                const srcCtx = payload.sourceCtx;
                 FAR.WM._endDrag();
                 FAR.setStatus('');
                 try {
-                    const ret = ext.acceptDrop(items, srcSide);
+                    const ret = ext.acceptDrop(items, srcCtx ? srcCtx.side : FAR.activePanel);
                     if (ret && typeof ret.catch === 'function') {
                         ret.catch(function (err) { FAR.toast('Не удалось принять файлы: ' + err.message, 'error'); });
                     }
@@ -281,7 +282,35 @@ FAR.WM._mountExplorerPanel = async function (win, props) {
                 return;
             }
 
+            // 2. Проверяем внутренние окна Проводника
             if (FAR.WM._dragPayload) {
+                let targetWin = null;
+                let targetSide = null;
+                const wins = FAR.WM.state.windows.slice().sort((a, b) => (b.zTop || 0) - (a.zTop || 0));
+
+                for (const w of wins) {
+                    if (w.appId !== 'explorer') continue;
+                    if (w.id === win.id) continue;
+
+                    const rect = w.el.getBoundingClientRect();
+                    if (ev.clientX >= rect.left && ev.clientX <= rect.right &&
+                        ev.clientY >= rect.top && ev.clientY <= rect.bottom) {
+                        targetWin = w;
+                        targetSide = w.props.side;
+                        break;
+                    }
+                }
+
+                if (targetWin && targetSide) {
+                    const payload = FAR.WM._dragPayload;
+                    if (ev.shiftKey) payload.mode = 'move';
+                    else payload.mode = 'copy';
+
+                    FAR.WM._performDrop(targetWin, targetSide);
+                    FAR.setStatus('');
+                    return;
+                }
+
                 FAR.WM._endDrag();
                 FAR.setStatus('');
             }
@@ -289,21 +318,6 @@ FAR.WM._mountExplorerPanel = async function (win, props) {
 
         document.addEventListener('mousemove', onMove, true);
         document.addEventListener('mouseup', onUp);
-    });
-
-    panelHost.addEventListener('mouseup', function (e) {
-        if (!FAR.WM._dragPayload) return;
-        if (FAR.WM._dragPayload.sourceWinId === win.id) return;
-
-        const rect = panelHost.getBoundingClientRect();
-        if (e.clientX < rect.left || e.clientX > rect.right ||
-            e.clientY < rect.top  || e.clientY > rect.bottom) return;
-
-        const payload = FAR.WM._dragPayload;
-        if (e.shiftKey) payload.mode = 'move';
-        else payload.mode = 'copy';
-
-        FAR.WM._performDrop(win, side);
     });
 
     let osDragCounter = 0;

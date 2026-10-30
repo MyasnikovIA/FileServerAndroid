@@ -1,10 +1,6 @@
 // ============================================================
-// Мульти-БД: операции между панелями (в т.ч. между разными БД).
+// 35c-multi-db-transfer.js
 // ============================================================
-//
-// Каждый вызов transferBetweenSides создаёт СВОЙ инстанс
-// прогресса — параллельные копирования между каталогами больше
-// не конфликтуют и не «перезаписывают» друг друга.
 
 FAR.transferBetweenSides = async function (mode) {
     const src = FAR.activePanel;
@@ -18,46 +14,54 @@ FAR.transferBetweenSides = async function (mode) {
     const selected = FAR.getSelectedItemsFromActivePanel();
     if (selected.length === 0) { FAR.toast('Ничего не выбрано', 'warning'); return; }
 
+    const items = selected.map(function(s) { return s.item; });
+
+    return FAR.transferBetweenContexts(sSrc, sDst, items, sDst.path, mode);
+};
+
+/**
+ * Универсальный перенос/копирование между двумя контекстами БД.
+ */
+FAR.transferBetweenContexts = async function (sSrc, sDst, items, targetPath, mode) {
+    if (!sSrc || !sSrc.db) { FAR.toast('Источник не подключён', 'warning'); return; }
+    if (!sDst || !sDst.db) { FAR.toast('Цель не подключена', 'warning'); return; }
+
     const sameServer = (sSrc.db.baseUrl && sDst.db.baseUrl &&
         sSrc.db.baseUrl === sDst.db.baseUrl);
 
     if (sameServer) {
-        return FAR._transferViaServerApi(mode, selected, sSrc, sDst, src, dst);
+        return FAR._transferCtxViaServerApi(mode, items, sSrc, sDst, targetPath);
     }
-    return FAR._transferViaClient(mode, selected, sSrc, sDst, src, dst);
+    return FAR._transferCtxViaClient(mode, items, sSrc, sDst, targetPath);
 };
 
 // ============================================================
-// Быстрый путь: серверный /api/copy | /api/move
+// Быстрый путь: серверный /api/copy | /api/move (один сервер)
 // ============================================================
-FAR._transferViaServerApi = async function (mode, selected, sSrc, sDst, src, dst) {
-    const targetPath = FAR.normPath(sDst.path);
+FAR._transferCtxViaServerApi = async function (mode, items, sSrc, sDst, targetPath) {
     const actionLabel = mode === 'move' ? 'Перенос' : 'Копирование';
     const endpoint = mode === 'move' ? '/api/move' : '/api/copy';
 
-    // СВОЙ инстанс прогресса на каждое копирование.
     const prog = FAR.startProgress(
         mode === 'move' ? '✂️' : '📋',
-        actionLabel + ': ' + selected.length + ' элем. → ' +
-        (dst === 'left' ? 'левая' : 'правая') + ' (сервер)',
-        selected.length,
+        actionLabel + ': ' + items.length + ' элем. (сервер)',
+        items.length,
         function () {}
     );
 
     await FAR._nextPaint();
-
     let ok = 0, err = 0;
 
-    for (let i = 0; i < selected.length; i++) {
+    for (let i = 0; i < items.length; i++) {
         if (prog.state.cancelled) break;
-        const item = selected[i].item;
+        const item = items[i];
         const srcPath = FAR.normPath(item.path);
         const itemName = item.name || srcPath.split('/').pop();
         const dstPath = FAR.normPath(
             targetPath ? targetPath + '/' + itemName : itemName
         );
 
-        prog.update(i, selected.length, srcPath, err);
+        prog.update(i, items.length, srcPath, err);
         prog.log((mode === 'move' ? '✂️ ' : '📋 ') + srcPath, 'info');
 
         try {
@@ -75,62 +79,62 @@ FAR._transferViaServerApi = async function (mode, selected, sSrc, sDst, src, dst
             err++;
             prog.log('❌ ' + srcPath + ': ' + e.message, 'err');
         }
-        prog.update(i + 1, selected.length, srcPath, err);
-    }
-
-    if (mode === 'move') {
-        sSrc.selectedIdx.clear();
-        sSrc.anchor = -1;
-        sSrc.cursor = -1;
+        prog.update(i + 1, items.length, srcPath, err);
     }
 
     prog.finish(err);
-    prog.log('━━━ Готово: ' + ok + ', ошибок: ' + err, ok > 0 ? 'ok' : 'err');
-
-    await FAR.reloadPanel('left');
-    await FAR.reloadPanel('right');
-
-    FAR.setStatus('✅ ' + actionLabel + ': ' + ok + ', ошибок: ' + err);
-    FAR.toast(actionLabel + ' ' + ok + ' из ' + selected.length, ok ? 'success' : 'error');
+    FAR.toast(actionLabel + ' ' + ok + ' из ' + items.length, ok ? 'success' : 'error');
 };
 
 // ============================================================
 // Медленный путь: разные серверы — read + write через клиент
 // ============================================================
-FAR._transferViaClient = async function (mode, selected, sSrc, sDst, src, dst) {
-    const targetPath = FAR.normPath(sDst.path);
-
+FAR._transferCtxViaClient = async function (mode, items, sSrc, sDst, targetPath) {
     const folderTasks = [];
-    const fileTasks   = [];
+    const fileTasks = [];
     const srcItemsToRemove = [];
 
-    for (const sel of selected) {
-        const item = sel.item;
-
+    for (const item of items) {
         if (item.isFolder) {
             const srcFolderPath = FAR.normPath(item.path);
             const folderName = item.name || srcFolderPath.split('/').pop();
             const dstFolderPath = FAR.normPath(
                 targetPath ? targetPath + '/' + folderName : folderName
             );
-
             folderTasks.push({ srcPath: srcFolderPath, dstPath: dstFolderPath });
 
-            const children = await FAR.listRecursiveFromSide(src, srcFolderPath);
-            const prefix = srcFolderPath + '/';
+            // Рекурсивный обход
+            const subPrefix = srcFolderPath ? srcFolderPath + '/' : '';
+            const encBase = encodeURIComponent(subPrefix);
+            const dStart = 'd:' + encBase;
+            const dEnd   = 'd:' + encBase + '\ufff0';
+            const fStart = 'f:' + encBase;
+            const fEnd   = 'f:' + encBase + '\ufff0';
 
-            for (const idxItem of children) {
-                const ip = FAR.normPath(idxItem.path);
-                if (!ip.startsWith(prefix)) continue;
+            try {
+                const [dRes, fRes] = await Promise.all([
+                    sSrc.db.allDocs({ startkey: dStart, endkey: dEnd, include_docs: true, recursive: true }),
+                    sSrc.db.allDocs({ startkey: fStart, endkey: fEnd, include_docs: true, recursive: true })
+                ]);
 
-                const rel = ip.substring(prefix.length);
-                const dstPath = FAR.normPath(dstFolderPath + '/' + rel);
-
-                if (idxItem.docType === 'folder' || idxItem.isFolder) {
-                    folderTasks.push({ srcPath: ip, dstPath: dstPath });
-                } else if (idxItem.docType === 'file' || !idxItem.isFolder) {
-                    fileTasks.push({ srcItem: idxItem, srcPath: ip, dstPath: dstPath });
+                for (const row of dRes.rows) {
+                    const p = FAR._parseDocId(row.id);
+                    if (!p) continue;
+                    const rel = p.path.substring(srcFolderPath.length + 1);
+                    if (!rel) continue;
+                    const dstPath = FAR.normPath(dstFolderPath + '/' + rel);
+                    folderTasks.push({ srcPath: p.path, dstPath: dstPath });
                 }
+                for (const row of fRes.rows) {
+                    const p = FAR._parseDocId(row.id);
+                    if (!p) continue;
+                    const rel = p.path.substring(srcFolderPath.length + 1);
+                    if (!rel) continue;
+                    const dstPath = FAR.normPath(dstFolderPath + '/' + rel);
+                    fileTasks.push({ srcItem: row.doc, srcPath: p.path, dstPath: dstPath });
+                }
+            } catch (e) {
+                console.warn('Failed to list dir:', srcFolderPath, e);
             }
         } else {
             const fileName = item.name;
@@ -141,7 +145,6 @@ FAR._transferViaClient = async function (mode, selected, sSrc, sDst, src, dst) {
         }
     }
 
-    // Убираем дубли папок
     const folderSeen = new Set();
     const uniqueFolders = [];
     for (const f of folderTasks) {
@@ -154,17 +157,14 @@ FAR._transferViaClient = async function (mode, selected, sSrc, sDst, src, dst) {
     const totalSteps = uniqueFolders.length + fileTasks.length;
     const actionLabel = mode === 'move' ? 'Перенос' : 'Копирование';
 
-    // СВОЙ инстанс прогресса на каждое копирование.
     const prog = FAR.startProgress(
         mode === 'move' ? '✂️' : '📋',
-        actionLabel + ': ' + selected.length + ' элем. → ' +
-        (dst === 'left' ? 'левая' : 'правая') + ' (разные серверы)',
+        actionLabel + ': ' + items.length + ' элем. (разные серверы)',
         totalSteps,
         function () {}
     );
 
     await FAR._nextPaint();
-
     let ok = 0, err = 0, step = 0;
 
     // 1. Папки
@@ -200,11 +200,37 @@ FAR._transferViaClient = async function (mode, selected, sSrc, sDst, src, dst) {
         prog.log((mode === 'move' ? '✂️ ' : '📋 ') + t.dstPath, 'info');
 
         try {
-            const res = await FAR.readFileBodyFromSide(src, t.srcItem);
-            const blob = new Blob([res.data], { type: res.contentType });
+            let att, ct;
+            try {
+                att = await sSrc.db.getAttachment(t.srcItem._id, 'b', { binary: true });
+                ct = t.srcItem.contentType || 'application/octet-stream';
+            } catch (e) {
+                if (e.status !== 404) throw e;
+                const doc = await sSrc.db.get(t.srcItem._id);
+                const children = doc.children || t.srcItem.children || [];
+                if (children.length === 0) throw new Error('Нет данных файла');
+
+                const chunks = [];
+                for (const chunkId of children) {
+                    try {
+                        const cAtt = await sSrc.db.getAttachment(chunkId, 'b', { binary: true });
+                        chunks.push(cAtt);
+                    } catch (e3) {}
+                }
+                const total = chunks.reduce(function (sum, c) { return sum + (c.size || 0); }, 0);
+                const data = new Uint8Array(total);
+                let off = 0;
+                for (const c of chunks) {
+                    const arr = new Uint8Array(await c.arrayBuffer());
+                    data.set(arr, off);
+                    off += arr.length;
+                }
+                att = new Blob([data], { type: ct });
+            }
+
+            const blob = att instanceof Blob ? att : new Blob([att], { type: ct });
             const newId = 'f:' + encodeURIComponent(t.dstPath);
-            await sDst.db.putAttachment(newId, 'b', null, blob,
-                res.contentType || 'application/octet-stream');
+            await sDst.db.putAttachment(newId, 'b', null, blob, ct);
 
             if (mode === 'move') srcItemsToRemove.push(t.srcItem._id);
             ok++;
@@ -216,7 +242,7 @@ FAR._transferViaClient = async function (mode, selected, sSrc, sDst, src, dst) {
         prog.update(step, totalSteps, t.dstPath, err);
     }
 
-    // 3. Для move — удаление из источника
+    // 3. Удаление из источника
     if (mode === 'move' && !prog.state.cancelled && srcItemsToRemove.length > 0) {
         prog.log('🗑️ Удаление из источника: ' + srcItemsToRemove.length + ' док.', 'info');
         for (const srcId of srcItemsToRemove) {
@@ -228,25 +254,16 @@ FAR._transferViaClient = async function (mode, selected, sSrc, sDst, src, dst) {
                 prog.log('⚠️ не удалён ' + srcId + ': ' + e.message, 'warn');
             }
         }
-        const folderIdsToRemove = selected
-            .filter(function (sel) { return sel.item.isFolder; })
-            .map(function (sel) { return sel.item._id; });
+        const folderIdsToRemove = items
+            .filter(function (item) { return item.isFolder; })
+            .map(function (item) { return item._id; });
         folderIdsToRemove.sort(function (a, b) { return b.length - a.length; });
         for (const fid of folderIdsToRemove) {
             try { const doc = await sSrc.db.get(fid); await sSrc.db.remove(doc); }
-            catch (e) { /* уже удалена */ }
+            catch (e) {}
         }
-        sSrc.selectedIdx.clear();
-        sSrc.anchor = -1;
-        sSrc.cursor = -1;
     }
 
     prog.finish(err);
-    prog.log('━━━ Готово: ' + ok + ', ошибок: ' + err, ok > 0 ? 'ok' : 'err');
-
-    await FAR.reloadPanel('left');
-    await FAR.reloadPanel('right');
-
-    FAR.setStatus('✅ ' + actionLabel + ': ' + ok + ', ошибок: ' + err);
     FAR.toast(actionLabel + ' ' + ok + ' из ' + totalSteps, ok ? 'success' : 'error');
 };

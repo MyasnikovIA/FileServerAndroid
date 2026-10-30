@@ -19,7 +19,7 @@ FAR.WM._beginDragFromExplorer = function (win, side, startX, startY) {
         for (const idx of Array.from(selSet).sort((a, b) => a - b)) {
             if (idx >= 0 && idx < files.length) {
                 const f = files[idx];
-                if (f) items.push({ _id: f._id, name: f.name, path: f.path, isFolder: f.isFolder });
+                if (f) items.push({ _id: f._id, name: f.name, path: f.path, isFolder: f.isFolder, contentType: f.contentType });
             }
         }
     }
@@ -27,7 +27,8 @@ FAR.WM._beginDragFromExplorer = function (win, side, startX, startY) {
 
     FAR.WM._dragPayload = {
         sourceWinId: win.id,
-        sourceSide: side,
+        sourceCtx: ctx,
+        sourcePath: ctx.path,
         items: items,
         mode: 'copy'
     };
@@ -55,7 +56,7 @@ FAR.WM._beginDragFromExplorer = function (win, side, startX, startY) {
     });
 
     FAR.setStatus('Перетаскивание: ' + items.length +
-        ' элемент(ов). Отпустите в окне Проводника, Ollama или другом приёмнике.');
+        ' элемент(ов). Отпустите в окне Проводника.');
 };
 
 FAR.WM._updateDragGhost = function (x, y) {
@@ -90,56 +91,23 @@ FAR.WM._performDrop = async function (targetWin, targetSide) {
     if (!payload) return;
 
     if (targetWin.id === payload.sourceWinId) {
-        FAR.toast('Перетащите в другое окно Проводника', 'info');
+        FAR.toast('Перетащите в другое окно', 'info');
         return;
     }
 
-    const srcSide = payload.sourceSide;
-    const dstSide = targetSide;
+    const sSrc = payload.sourceCtx;
+    const sDst = FAR.side[targetSide];
 
-    if (srcSide === dstSide) {
-        FAR.toast('Источник и цель — одна панель. Откройте второе окно Проводника.', 'warning');
-        return;
-    }
-
-    const sSrc = FAR.side[srcSide];
-    const sDst = FAR.side[dstSide];
     if (!sSrc || !sSrc.db) { FAR.toast('Источник не подключён', 'warning'); return; }
     if (!sDst || !sDst.db) { FAR.toast('Цель не подключена', 'warning'); return; }
 
     const mode = payload.mode || 'copy';
 
-    const srcFiles = sSrc.files || [];
-    const wantedIds = new Set(payload.items.map(it => it._id));
-    const indices = [];
-    srcFiles.forEach(function (f, idx) {
-        if (f && wantedIds.has(f._id)) indices.push(idx);
-    });
-
-    if (indices.length === 0) {
-        FAR.toast('Перетаскиваемые файлы не найдены в текущей папке источника', 'warning');
-        return;
-    }
-
-    const prevActive = FAR.activePanel;
-    FAR.activePanel = srcSide;
-
-    const prevSel = Array.from(sSrc.selectedIdx);
-    const prevAnchor = sSrc.anchor;
-    sSrc.selectedIdx.clear();
-    indices.forEach(i => sSrc.selectedIdx.add(i));
-    sSrc.anchor = indices[0];
-
     try {
-        await FAR.transferBetweenSides(mode);
+        await FAR.transferBetweenContexts(sSrc, sDst, payload.items, sDst.path, mode);
     } catch (e) {
         console.error('[WM drop] transfer failed:', e);
         FAR.toast('Ошибка переноса: ' + e.message, 'error');
-    } finally {
-        FAR.activePanel = prevActive;
-        sSrc.selectedIdx.clear();
-        prevSel.forEach(i => sSrc.selectedIdx.add(i));
-        sSrc.anchor = prevAnchor;
     }
 
     await FAR.reloadPanel('left');
