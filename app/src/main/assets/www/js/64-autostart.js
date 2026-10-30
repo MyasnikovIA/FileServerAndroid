@@ -44,7 +44,9 @@ FAR.Autostart = {
         const cfg = await this.getConfig();
         console.log('[Autostart] Config loaded:', cfg);
 
-        // 1. Выполнение JS-скриптов
+        // ────────────────────────────────────────────────
+        // 1. JS-скрипты (не зависят от WM/логина)
+        // ────────────────────────────────────────────────
         for (const script of cfg.jsScripts) {
             if (script.url) {
                 try {
@@ -63,37 +65,86 @@ FAR.Autostart = {
             }
         }
 
-        // 2. Запуск Android-приложений
+        // ────────────────────────────────────────────────
+        // 2. Android-приложения (не зависят от WM/логина)
+        // ────────────────────────────────────────────────
         if (window.AndroidBridge && typeof window.AndroidBridge.launchApp === 'function') {
             for (const app of cfg.androidApps) {
                 try {
                     window.AndroidBridge.launchApp(app.pkg, app.act || '');
                     console.log('[Autostart] Launched Android app:', app.pkg);
-                } catch(e) { console.warn('[Autostart] Failed to launch app (ignored):', app.pkg, e); }
+                } catch(e) {
+                    console.warn('[Autostart] Failed to launch app (ignored):', app.pkg, e);
+                }
             }
         }
 
-        // 3. Открытие окон WM
-        if (typeof FAR.WM !== 'undefined') {
-            for (const w of cfg.wmApps) {
-                try {
-                    FAR.WM.openApp(w.id, { props: w.props || {} });
-                    console.log('[Autostart] Opened WM app:', w.id);
-                } catch(e) { console.warn('[Autostart] Failed to open WM app (ignored):', w.id, e); }
+        // ────────────────────────────────────────────────
+        // 3. Открытие окон WM — только после активации WM
+        //    и только на «чистом» профиле (нет saved-state).
+        // ────────────────────────────────────────────────
+        if (typeof FAR.WM !== 'undefined'
+            && Array.isArray(cfg.wmApps) && cfg.wmApps.length > 0) {
+
+            const openWmApps = function () {
+                if (!FAR.WM || !FAR.WM.state || !FAR.WM.state.active) {
+                    return false; // WM ещё не активен — ждём
+                }
+
+                // Уважаем сохранённое состояние: если в LS есть
+                // массив окон (даже пустой) — значит, пользователь
+                // уже формировал рабочий стол. _restoreWindows
+                // восстановит как было. Autostart не вмешивается.
+                let savedState = null;
+                if (typeof FAR.WM._loadWindowState === 'function') {
+                    try { savedState = FAR.WM._loadWindowState(); } catch (e) {}
+                }
+                if (savedState !== null) {
+                    console.log('[Autostart] wmApps: skipped (has saved window state)');
+                    return true;
+                }
+
+                for (const w of cfg.wmApps) {
+                    try {
+                        const already = FAR.WM.state.windows.some(function (win) {
+                            return win && win.appId === w.id;
+                        });
+                        if (already) {
+                            console.log('[Autostart] wmApps: skip already open:', w.id);
+                            continue;
+                        }
+                        FAR.WM.openApp(w.id, { props: w.props || {} });
+                        console.log('[Autostart] Opened WM app:', w.id);
+                    } catch(e) {
+                        console.warn('[Autostart] Failed to open WM app (ignored):', w.id, e);
+                    }
+                }
+                return true;
+            };
+
+            if (!openWmApps()) {
+                // WM не активен — поллинг до логина. Ждём до 5 минут.
+                let attempts = 0;
+                const maxAttempts = 600; // 500ms × 600 = 5 минут
+                const iv = setInterval(function () {
+                    attempts++;
+                    if (openWmApps() || attempts >= maxAttempts) {
+                        clearInterval(iv);
+                    }
+                }, 500);
             }
         }
+
         console.log('[Autostart] Boot sequence complete.');
     },
 
     addAndroidApp: function(pkg, act, label) {
         const data = this._getLocal();
         if (!data.androidApps) data.androidApps = [];
-
         if (data.androidApps.some(a => a.pkg === pkg && a.act === act)) {
             FAR.toast('Приложение уже в автозапуске', 'info');
             return;
         }
-
         data.androidApps.push({ pkg: pkg, act: act, label: label });
         this._saveLocal(data);
         FAR.toast('Добавлено в автозапуск: ' + label, 'success');
@@ -102,12 +153,10 @@ FAR.Autostart = {
     addWmApp: function(id, title) {
         const data = this._getLocal();
         if (!data.wmApps) data.wmApps = [];
-
         if (data.wmApps.some(a => a.id === id)) {
             FAR.toast('Приложение уже в автозапуске', 'info');
             return;
         }
-
         data.wmApps.push({ id: id, title: title });
         this._saveLocal(data);
         FAR.toast('Добавлено в автозапуск: ' + title, 'success');
@@ -116,12 +165,10 @@ FAR.Autostart = {
     addJsScript: function(url, name) {
         const data = this._getLocal();
         if (!data.jsScripts) data.jsScripts = [];
-
         if (data.jsScripts.some(s => s.url === url)) {
             FAR.toast('Скрипт уже в автозапуске', 'info');
             return;
         }
-
         data.jsScripts.push({ url: url, name: name || url });
         this._saveLocal(data);
         FAR.toast('Скрипт добавлен в автозапуск', 'success');

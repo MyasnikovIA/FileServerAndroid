@@ -800,15 +800,26 @@ FAR.WM.clearWindowState = function () {
 };
 
 FAR.WM._restoreWindows = async function () {
+    // Чистый старт: закрываем любые окна, которые могли быть
+    // созданы ДО WM.enter() — обычно это autostart, сработавший
+    // до авторизации. Их состояние уже сохранено в LS, поэтому
+    // ниже восстановим корректный набор из LS.
+    if (FAR.WM.state.windows.length > 0) {
+        const preIds = FAR.WM.state.windows.map(function (w) { return w.id; });
+        for (const id of preIds) {
+            try { FAR.WM.closeWindow(id, true); } catch (e) { /* ignore */ }
+        }
+    }
+
     const snaps = FAR.WM._loadWindowState();
 
-    // Если в localStorage ничего нет — это первый запуск, открываем проводник
+    // Первый запуск в жизни профиля — открываем дефолтный explorer.
     if (snaps === null) {
         FAR.WM.openApp('explorer');
         return;
     }
 
-    // Если массив пустой — пользователь закрыл все окна, ничего не открываем
+    // Пользователь закрыл все окна в прошлой сессии — уважаем.
     if (snaps.length === 0) {
         return;
     }

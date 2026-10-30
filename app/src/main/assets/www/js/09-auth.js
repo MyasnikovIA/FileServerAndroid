@@ -1,8 +1,9 @@
 // ============================================================
 // js/09-auth.js — UI авторизации и logout.
 // В WM-only режиме элементов тулбара нет, поэтому все DOM-
-// обращения — null-safe. После logout WM остаётся скрытым:
-// пользователь должен видеть только модалку логина.
+// обращения — null-safe. После logout WM остаётся скрытым,
+// а сохранённое состояние окон СОХРАНЯЕТСЯ — при следующем
+// входе рабочий стол восстановится в том же виде.
 // ============================================================
 
 FAR.updateAuthUI = function () {
@@ -47,10 +48,6 @@ FAR.updateAuthUI = function () {
     }
 };
 
-// ============================================================
-// Logout. Вызывается из меню Пуск: FAR.WM.logout() → onAuthButton().
-// ============================================================
-
 FAR.onAuthButton = function () {
     if (!FAR.db) {
         FAR.openConnModal(true);
@@ -61,7 +58,6 @@ FAR.onAuthButton = function () {
         return;
     }
 
-    // Закрываем меню Пуск (если logout вызван из него)
     if (typeof FAR.WM !== 'undefined' && typeof FAR.WM.closeStartMenu === 'function') {
         try { FAR.WM.closeStartMenu(); } catch (e) { /* ignore */ }
     }
@@ -70,26 +66,23 @@ FAR.onAuthButton = function () {
     try { localStorage.removeItem(FAR.LS_CONN_LEFT); } catch (e) {}
     try { localStorage.removeItem(FAR.LS_CONN_RIGHT); } catch (e) {}
 
-    // Сброс токена/cookie, чтобы следующий логин не унаследовал Bearer
     if (typeof FAR.clearAuthToken === 'function') {
         try { FAR.clearAuthToken(); } catch (e) { /* ignore */ }
     }
 
-    // Выходим из WM — скрывает #wmRoot и закрывает все окна
+    // WM.exit() СОХРАНЯЕТ состояние окон (LS_WINDOWS_KEY) перед
+    // принудительным закрытием — при следующем входе восстановим.
     if (typeof FAR.WM !== 'undefined' && FAR.WM.state && FAR.WM.state.active) {
         try { FAR.WM.exit(); } catch (e) { /* ignore */ }
     }
 
-    // Сбрасываем сохранённые окна — после следующего входа
-    // должен быть чистый рабочий стол (explorer в корне).
-    if (typeof FAR.WM !== 'undefined' && typeof FAR.WM.clearWindowState === 'function') {
-        try { FAR.WM.clearWindowState(); } catch (e) { /* ignore */ }
-    }
+    // ── НЕ очищаем saved-window-state: пользователь должен
+    //    вернуться к тому же рабочему столу после повторного входа.
+
     if (typeof FAR.WM !== 'undefined' && typeof FAR.WM.clearMode === 'function') {
         try { FAR.WM.clearMode(); } catch (e) { /* ignore */ }
     }
 
-    // Снимаем флаги
     FAR.consoleEnabled = false;
     if (typeof FAR.WM !== 'undefined' && typeof FAR.WM.unregisterConsoleApp === 'function') {
         try { FAR.WM.unregisterConsoleApp(); } catch (e) {}
@@ -108,7 +101,6 @@ FAR.onAuthButton = function () {
     FAR.videoChatEnabled = false;
     FAR.videoChatPort = 8081;
 
-    // Сбрасываем контексты панелей (используются WM-проводником)
     FAR.side.left  = FAR.createSideContext('left');
     FAR.side.right = FAR.createSideContext('right');
     FAR.currentConn = null;
@@ -117,8 +109,7 @@ FAR.onAuthButton = function () {
     if (typeof FAR.updateTotalSize === 'function') FAR.updateTotalSize();
     if (typeof FAR.updateConnIndicators === 'function') FAR.updateConnIndicators();
 
-    // Ключевой момент: WM НЕ входим. Показываем только модалку
-    // логина поверх пустого фона. WM.enter() будет вызван из
-    // FAR.submitConnModal() после успешного подключения.
+    // WM не активируем. После успешного логина submitConnModal
+    // сам вызовет WM.enter() → _restoreWindows восстановит окна.
     FAR.openConnModal(true);
 };
