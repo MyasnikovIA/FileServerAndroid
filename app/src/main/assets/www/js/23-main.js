@@ -42,7 +42,8 @@ FAR.injectModals = function() {
         'modals/loading.html',
         'modals/debug.html',
         'modals/desktop.html',
-        'modals/wm-file-dialog.html'
+        'modals/wm-file-dialog.html',
+        'modals/change-password.html'
     ];
     let html = '';
     for (const f of files) {

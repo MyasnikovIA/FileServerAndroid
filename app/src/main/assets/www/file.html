@@ -61,6 +61,9 @@
     <button onclick="FAR.openConnModal(false)" id="btnServer" title="Сменить текущий сервер" style="background:#cba6f7;color:#1e1e2e;">🗄️ Сервер</button>
     <button onclick="FAR.onAuthButton()" class="btn-auth" id="btnAuth" title="Войти / Выйти">🔐 LogIn</button>
 
+    <!-- КНОПКА СМЕНЫ ПАРОЛЯ -->
+    <button onclick="FAR.openChangePassword()" id="btnPass" title="Сменить пароль" style="background:#f38ba8;color:#1e1e2e;">🔐 Пароль</button>
+
     <button onclick="FAR.WM.toggle()" id="btnWM" title="Оконный режим">🖥 Рабочий стол</button>
     <button onclick="FAR.gamepadModeCycle()"
             oncontextmenu="event.preventDefault(); FAR.openGamepadSetup();"
@@ -196,6 +199,7 @@
 <script src="js/62-touch-adapter.js"></script>
 <script src="js/63-android-apps.js"></script>
 <script src="js/64-autostart.js"></script>
+<script src="js/65-change-password.js"></script>
 
 </body>
 </html>

@@ -49,9 +49,6 @@ public class Config {
     public String ollamaBinary = "ollama";
     public String ollamaCwd = "";
 
-    // ============================================================
-    // АВТОЗАПУСК
-    // ============================================================
     public JSONArray autostartAndroid = new JSONArray();
     public JSONArray autostartJs = new JSONArray();
     public JSONArray autostartWm = new JSONArray();
@@ -166,17 +163,12 @@ public class Config {
             cfg.ollamaCwd = ol.optString("cwd", "").trim();
         }
 
-        // ============================================================
-        // АВТОЗАПУСК
-        // ============================================================
         JSONObject ast = root.optJSONObject("autostart");
         if (ast != null) {
             JSONArray apps = ast.optJSONArray("androidApps");
             if (apps != null) cfg.autostartAndroid = apps;
-
             JSONArray js = ast.optJSONArray("jsScripts");
             if (js != null) cfg.autostartJs = js;
-
             JSONArray wm = ast.optJSONArray("wmApps");
             if (wm != null) cfg.autostartWm = wm;
         }
@@ -232,6 +224,114 @@ public class Config {
         }
 
         return cfg;
+    }
+
+    // ============================================================
+    // СОХРАНЕНИЕ КОНФИГА
+    // ============================================================
+
+    public JSONObject toJson() throws JSONException {
+        JSONObject root = new JSONObject();
+
+        JSONObject http = new JSONObject();
+        http.put("port", port);
+        http.put("host", host);
+        root.put("http", http);
+
+        if (httpsEnabled) {
+            JSONObject https = new JSONObject();
+            https.put("enabled", true);
+            https.put("cert", httpsCert);
+            https.put("key", httpsKey);
+            https.put("keystore", httpsKeystore);
+            https.put("password", httpsPassword);
+            root.put("https", https);
+        }
+
+        root.put("web", webPath);
+
+        if (!consoleShell.isEmpty()) {
+            JSONObject console = new JSONObject();
+            console.put("shell", consoleShell);
+            console.put("cwd", consoleCwd);
+            console.put("timeoutSec", consoleTimeoutSec);
+            console.put("maxOutputBytes", consoleMaxOutputBytes);
+            root.put("console", console);
+        }
+
+        if (hermesEnabled) {
+            JSONObject hermes = new JSONObject();
+            hermes.put("enabled", true);
+            hermes.put("title", hermesTitle);
+            hermes.put("icon", hermesIcon);
+            hermes.put("shell", hermesShell);
+            hermes.put("cwd", hermesCwd);
+            hermes.put("startupDelayMs", hermesStartupDelayMs);
+            hermes.put("commandDelayMs", hermesCommandDelayMs);
+            hermes.put("commands", new JSONArray(hermesCommands));
+            root.put("hermes", hermes);
+        }
+
+        if (videoChatEnabled) {
+            JSONObject vc = new JSONObject();
+            vc.put("enabled", true);
+            vc.put("port", videoChatPort);
+            vc.put("wsGuid", wsGuid);
+            root.put("videochat", vc);
+        }
+
+        if (!ollamaEnabled) {
+            JSONObject ol = new JSONObject();
+            ol.put("enabled", false);
+            ol.put("binary", ollamaBinary);
+            ol.put("cwd", ollamaCwd);
+            root.put("ollama", ol);
+        }
+
+        if (autostartAndroid.length() > 0 || autostartJs.length() > 0 || autostartWm.length() > 0) {
+            JSONObject ast = new JSONObject();
+            if (autostartAndroid.length() > 0) ast.put("androidApps", autostartAndroid);
+            if (autostartJs.length() > 0) ast.put("jsScripts", autostartJs);
+            if (autostartWm.length() > 0) ast.put("wmApps", autostartWm);
+            root.put("autostart", ast);
+        }
+
+        JSONArray arrU = new JSONArray();
+        for (User u : users.values()) {
+            JSONObject jo = new JSONObject();
+            jo.put("name", u.name);
+            jo.put("password", u.password);
+            jo.put("quota", u.quotaMb);
+            jo.put("console", u.consoleEnabled);
+            arrU.put(jo);
+        }
+        root.put("users", arrU);
+
+        JSONArray arrS = new JSONArray();
+        for (Share sh : shares) {
+            JSONObject jo = new JSONObject();
+            jo.put("name", sh.name);
+            jo.put("physical", sh.physical);
+            jo.put("type", sh.type);
+            jo.put("access", new JSONArray(sh.access));
+            jo.put("anonymous", sh.anonymous);
+            jo.put("users", new JSONArray(sh.users));
+            jo.put("quota", sh.quotaMb);
+            arrS.put(jo);
+        }
+        root.put("shares", arrS);
+
+        return root;
+    }
+
+    public void save(Path configPath) throws IOException {
+        try {
+            JSONObject root = toJson();
+            String jsonString = root.toString(2);
+            Files.write(configPath, jsonString.getBytes(StandardCharsets.UTF_8));
+        } catch (JSONException e) {
+            throw new IOException("Failed to serialize config", e);
+        }
     }
 
     public Share findShare(String name) {

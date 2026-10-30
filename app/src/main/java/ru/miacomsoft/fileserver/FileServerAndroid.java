@@ -65,13 +65,12 @@ public class FileServerAndroid {
         staticHandler = new StaticHandler(webRoot);
         rootHandler   = new RootHandler(staticHandler);
 
-        FileServer.bind(this);
+        FileServer.bind(this, configTemp);
 
         HttpServer srv = HttpServer.create(
                 new InetSocketAddress(config.host, config.port), 0);
 
         srv.createContext("/api/events", new SseHandler());
-        // РЕГИСТРАЦИЯ ПРОКСИ-ОБРАБОТЧИКА
         srv.createContext("/api/proxy",  ex -> ProxyHandler.handle(ex));
         srv.createContext("/api",        new ApiHandler());
         srv.createContext("/",           rootHandler);
@@ -218,8 +217,12 @@ public class FileServerAndroid {
         Path filesDir = context.getFilesDir().toPath();
         Path cfg = filesDir.resolve("config.json");
 
-        try (InputStream is = context.getAssets().open("config.json")) {
-            Files.copy(is, cfg, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        // Копируем файл настроек ТОЛЬКО если его нет.
+        // Иначе изменения (смена пароля, добавление пользователей) будут сброшены.
+        if (!Files.exists(cfg)) {
+            try (InputStream is = context.getAssets().open("config.json")) {
+                Files.copy(is, cfg);
+            }
         }
         this.configTemp = cfg;
     }

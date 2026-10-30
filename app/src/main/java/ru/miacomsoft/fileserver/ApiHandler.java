@@ -46,17 +46,18 @@ public class ApiHandler implements HttpHandler {
 
         try {
             switch (path) {
-                case "/api/info":      handleInfo(ex, method, session);      return;
-                case "/api/whoami":    handleWhoami(ex, method, session);    return;
-                case "/api/autostart": handleAutostart(ex, method);          return;
-                case "/api/list":      handleList(ex, method, q, session);   return;
-                case "/api/stat":      handleStat(ex, method, q, session);   return;
-                case "/api/read":      handleRead(ex, method, q, session);   return;
-                case "/api/write":     handleWrite(ex, method, q, session);  return;
-                case "/api/mkdir":     handleMkdir(ex, method, q, session);  return;
-                case "/api/delete":    handleDelete(ex, method, q, session); return;
-                case "/api/move":      handleMove(ex, method, q, session);   return;
-                case "/api/copy":      handleCopy(ex, method, q, session);   return;
+                case "/api/info":            handleInfo(ex, method, session);            return;
+                case "/api/whoami":          handleWhoami(ex, method, session);          return;
+                case "/api/autostart":       handleAutostart(ex, method);                return;
+                case "/api/change-password": handleChangePassword(ex, method, session);  return;
+                case "/api/list":            handleList(ex, method, q, session);         return;
+                case "/api/stat":            handleStat(ex, method, q, session);         return;
+                case "/api/read":            handleRead(ex, method, q, session);         return;
+                case "/api/write":           handleWrite(ex, method, q, session);        return;
+                case "/api/mkdir":           handleMkdir(ex, method, q, session);        return;
+                case "/api/delete":          handleDelete(ex, method, q, session);       return;
+                case "/api/move":            handleMove(ex, method, q, session);         return;
+                case "/api/copy":            handleCopy(ex, method, q, session);         return;
                 default:
                     if (tryApiSharePath(ex, path)) return;
                     FileServer.sendError(ex, 404, "Unknown endpoint: " + path);
@@ -85,6 +86,52 @@ public class ApiHandler implements HttpHandler {
         }
     }
 
+    private void handleChangePassword(HttpExchange ex, String method, AuthService.Session s) throws Exception {
+        if (!"POST".equals(method)) {
+            FileServer.sendError(ex, 405, "Method not allowed");
+            return;
+        }
+        if (s.anonymous || s.user == null) {
+            FileServer.sendError(ex, 403, "Only authenticated users can change password");
+            return;
+        }
+
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        try (InputStream is = ex.getRequestBody()) {
+            byte[] tmp = new byte[4096];
+            int n;
+            while ((n = is.read(tmp)) > 0) buf.write(tmp, 0, n);
+        }
+        String body = new String(buf.toByteArray(), StandardCharsets.UTF_8).trim();
+
+        String oldPass = "";
+        String newPass = "";
+        try {
+            JSONObject jo = new JSONObject(body);
+            oldPass = jo.optString("oldPassword", "");
+            newPass = jo.optString("newPassword", "");
+        } catch (Exception e) {
+            FileServer.sendError(ex, 400, "Invalid JSON body");
+            return;
+        }
+
+        if (!Objects.equals(s.user.password == null ? "" : s.user.password, oldPass)) {
+            FileServer.sendError(ex, 400, "Неверный текущий пароль");
+            return;
+        }
+        if (newPass == null || newPass.isEmpty()) {
+            FileServer.sendError(ex, 400, "Пароль не может быть пустым");
+            return;
+        }
+
+        s.user.password = newPass;
+        FileServer.config().save(FileServer.configPath());
+
+        JSONObject ok = new JSONObject();
+        ok.put("ok", true);
+        FileServer.sendJson(ex, 200, ok.toString());
+    }
+
     private void handleAutostart(HttpExchange ex, String method) throws Exception {
         if (!"GET".equals(method)) {
             FileServer.sendError(ex, 405, "Method not allowed");
@@ -108,6 +155,7 @@ public class ApiHandler implements HttpHandler {
         if ("proxy".equals(shareName) || "login".equals(shareName) ||
                 "logout".equals(shareName) || "info".equals(shareName) ||
                 "whoami".equals(shareName) || "autostart".equals(shareName) ||
+                "change-password".equals(shareName) ||
                 "list".equals(shareName) || "stat".equals(shareName) ||
                 "read".equals(shareName) || "write".equals(shareName) ||
                 "mkdir".equals(shareName) || "delete".equals(shareName) ||
@@ -288,7 +336,6 @@ public class ApiHandler implements HttpHandler {
         info.put("userUsedBytes", FileServer.quota().getUserUsedBytes(s));
 
         JSONArray sharesArr = new JSONArray();
-        // Безопасная копия списка для предотвращения ConcurrentModificationException
         List<Config.Share> sharesCopy = new ArrayList<>(FileServer.config().shares);
 
         for (Config.Share sh : sharesCopy) {

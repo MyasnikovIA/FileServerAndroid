@@ -20,12 +20,12 @@ public class FileServer {
     private static Path webRoot;
     private static StaticHandler staticHandler;
     private static RootHandler rootHandler;
-    private static FileServerAndroid instance; // Ссылка на инстанс для вызова методов
+    private static Path configPath;
 
     static final Map<String, SseConnection> sseClients = new ConcurrentHashMap<>();
 
-    static void bind(FileServerAndroid inst) {
-        instance = inst;
+    static void bind(FileServerAndroid inst, Path cfgPath) {
+        configPath = cfgPath;
         config = inst.config();
         tokens = inst.tokens();
         auth = inst.auth();
@@ -36,7 +36,6 @@ public class FileServer {
     }
 
     static void unbind() {
-        instance = null;
         config = null;
         tokens = null;
         auth = null;
@@ -44,6 +43,7 @@ public class FileServer {
         webRoot = null;
         staticHandler = null;
         rootHandler = null;
+        configPath = null;
         sseClients.clear();
     }
 
@@ -54,13 +54,7 @@ public class FileServer {
     static Path webRoot() { return webRoot; }
     static RootHandler rootHandler() { return rootHandler; }
     static StaticHandler staticHandler() { return staticHandler; }
-
-    // Позволяет ApiHandler'у обновлять список USB-дисков "на лету"
-    static void remountExternalDrives() {
-        if (instance != null) {
-            instance.mountExternalDrives();
-        }
-    }
+    static Path configPath() { return configPath; }
 
     static void broadcastEvent(String event, String data) {
         for (Map.Entry<String, SseConnection> e : sseClients.entrySet()) {
