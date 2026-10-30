@@ -95,11 +95,6 @@ FAR.WM.openWindow = function (opts) {
     const layer = document.getElementById('wmWindowsLayer') || desktop;
     const rect = FAR.WM._getDesktopRect();
 
-    // ============================================================
-    // Клампим размеры окна к размеру вьюпорта — чтобы окно,
-    // сохранённое на большом экране, не вылезало за границы
-    // маленького (мобильного) экрана.
-    // ============================================================
     const maxW = Math.max(280, rect.width  - 40);
     const maxH = Math.max(160, rect.height - 40);
 
@@ -117,7 +112,6 @@ FAR.WM.openWindow = function (opts) {
         y = Math.max(20, Math.round((rect.height - h) / 2) - 60 + offset);
     }
 
-    // Клампим позицию: заголовок окна должен быть в пределах вьюпорта
     if (x + w > rect.width)  x = Math.max(0, rect.width  - w);
     if (y + h > rect.height) y = Math.max(0, rect.height - h);
     if (x < 0) x = 0;
@@ -179,12 +173,6 @@ FAR.WM.openWindow = function (opts) {
         FAR.WM._startDrag(e, id);
     });
 
-    // ============================================================
-    // Двойной клик по заголовку → развернуть/восстановить.
-    // Эмулируем клик по кнопке .wm-btn-max, чтобы срабатывало
-    // ровно то же событие, что и при явном нажатии кнопки
-    // (см. требование: «срабатывает событие кнопки wm-btn-max»).
-    // ============================================================
     titlebar.addEventListener('dblclick', function (e) {
         if (e.target.closest('.wm-title-btn')) return;
         e.preventDefault();
@@ -275,7 +263,14 @@ FAR.WM.closeWindow = function (id, force) {
     FAR.WM._renderTaskbar();
 
     if (!force) {
-        FAR.WM._saveWindowStateDebounced();
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ:
+        // Если закрыли последнее окно, сохраняем состояние МГНОВЕННО (без задержки),
+        // чтобы при быстрой перезагрузке пустой массив успел записаться в localStorage.
+        if (FAR.WM.state.windows.length === 0) {
+            FAR.WM._saveWindowState();
+        } else {
+            FAR.WM._saveWindowStateDebounced();
+        }
     }
 };
 
@@ -535,10 +530,6 @@ FAR.WM._bindGlobalEvents = function () {
         }
     }, true);
 
-    // ============================================================
-    // Resize вьюпорта: пересчитываем maximized/snapped окна
-    // И клампим обычные окна, чтобы они не вылезали за экран.
-    // ============================================================
     window.addEventListener('resize', function () {
         if (!FAR.WM.state.active) return;
         const rect = FAR.WM._getDesktopRect();
@@ -550,7 +541,6 @@ FAR.WM._bindGlobalEvents = function () {
             } else if (w.snap === 'right') {
                 FAR.WM.snapWindow(w.id, 'right');
             } else {
-                // Клампим обычные окна к новому размеру вьюпорта
                 let nx = w.x, ny = w.y, nw = w.w, nh = w.h;
                 const maxW = Math.max(280, rect.width  - 20);
                 const maxH = Math.max(160, rect.height - 20);
@@ -644,11 +634,7 @@ FAR.WM._tickClock = function () {
         '<div class="wm-clock-date">' + dd + '.' + mo + '.' + yy + '</div>';
 };
 
-/**
- * Обновляет трей. Прогресс агрегируется по всем активным инстансам.
- */
 FAR.WM.updateTray = function () {
-    // БД
     const dbEl = document.getElementById('wmTrayDb');
     if (dbEl) {
         const ctx = FAR.side[FAR.activePanel];
@@ -658,7 +644,6 @@ FAR.WM.updateTray = function () {
         dbEl.title = 'Источник активной панели: ' + txt;
     }
 
-    // Джойстик
     const gpEl = document.getElementById('wmTrayGamepad');
     if (gpEl) {
         const mode = (typeof FAR.getGamepadMode === 'function') ? FAR.getGamepadMode() : 'files';
@@ -668,7 +653,6 @@ FAR.WM.updateTray = function () {
         if (span) span.textContent = label;
     }
 
-    // Прогресс — агрегация по всем активным инстансам
     const prEl = document.getElementById('wmTrayProgress');
     if (prEl) {
         let activeCount = 0;
@@ -818,11 +802,13 @@ FAR.WM.clearWindowState = function () {
 FAR.WM._restoreWindows = async function () {
     const snaps = FAR.WM._loadWindowState();
 
+    // Если в localStorage ничего нет — это первый запуск, открываем проводник
     if (snaps === null) {
         FAR.WM.openApp('explorer');
         return;
     }
 
+    // Если массив пустой — пользователь закрыл все окна, ничего не открываем
     if (snaps.length === 0) {
         return;
     }
