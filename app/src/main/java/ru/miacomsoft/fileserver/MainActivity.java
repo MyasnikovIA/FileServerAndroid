@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.net.http.SslError;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -22,6 +23,7 @@ import android.webkit.CookieManager;
 import android.webkit.JsPromptResult;
 import android.webkit.JsResult;
 import android.webkit.RenderProcessGoneDetail;
+import android.webkit.SslErrorHandler;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -52,7 +54,6 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String LAUNCH_MARKER = "__LAUNCH_APP__|";
 
-    // Защита от циклов перезагрузки WebView
     private static final long RELOAD_MIN_INTERVAL_MS = 5000L;
     private long lastReloadAt = 0L;
     private boolean reloadInProgress = false;
@@ -91,7 +92,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        Log.i("MainActivity", "VERSION 2026-10-30 v4 — fixed lambda parameter shadowing");
+        Log.i("MainActivity", "VERSION 2026-10-30 v5 — SSL ignore for WM iframes");
 
         getWindow().setFlags(
                 WindowManager.LayoutParams.FLAG_FULLSCREEN,
@@ -306,11 +307,10 @@ public class MainActivity extends AppCompatActivity {
         s.setBuiltInZoomControls(false);
         s.setJavaScriptCanOpenWindowsAutomatically(false);
 
-        // ============================================================
-        // КРИТИЧЕСКИ ВАЖНО: Подмена User-Agent!
-        // Многие серверы и роутеры блокируют запросы, если видят,
-        // что это WebView, а не настоящий Chrome.
-        // ============================================================
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        }
+
         String ua = s.getUserAgentString();
         if (ua != null && ua.contains("wv")) {
             ua = ua.replace("; wv", "");
@@ -399,6 +399,13 @@ public class MainActivity extends AppCompatActivity {
         });
 
         webView.setWebViewClient(new WebViewClient() {
+
+            // !!! РАЗРЕШАЕМ ИГНОРИРОВАТЬ ОШИБКИ SSL В IFrame !!!
+            @Override
+            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                Log.w("MainActivity", "SSL error (iframe): " + error.toString() + " — proceeding.");
+                handler.proceed();
+            }
 
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
@@ -552,11 +559,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // ============================================================
-        // FIX: параметр лямбды переименован с `ua` на `userAgent`,
-        // чтобы не конфликтовать с локальной переменной `ua`,
-        // объявленной выше в этом же методе.
-        // ============================================================
         webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
             if (url == null) return;
             if (url.startsWith("blob:") || url.startsWith("data:")) {
