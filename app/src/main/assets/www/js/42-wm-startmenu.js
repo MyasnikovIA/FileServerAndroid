@@ -2,7 +2,7 @@
 // 42-wm-startmenu.js — меню Пуск с категориями и подменю
 // ============================================================
 
-console.log('[StartMenu] VERSION 2026-10-30 v8 — touch fix');
+console.log('[StartMenu] VERSION 2026-10-30 v10');
 
 FAR.WM.toggleStartMenu = function () {
     const sm = document.getElementById('wmStartMenu');
@@ -17,6 +17,7 @@ FAR.WM.openStartMenu = function () {
     if (!sm) return;
     sm.classList.add('open');
     if (btn) btn.classList.add('open');
+    sm.style.zIndex = '1000000'; // Поверх всех окон
     FAR.WM._hideStartSubmenu();
     FAR.WM._renderStartMenu('');
     const search = document.getElementById('wmStartSearch');
@@ -107,7 +108,7 @@ FAR.WM._ensureStartSubmenu = function () {
     const el = document.createElement('div');
     el.className = 'wm-start-submenu';
     el.style.position = 'fixed';
-    el.style.zIndex   = '9999';
+    el.style.zIndex   = '1000001'; // Чуть выше меню Пуск
     el.style.display  = 'none';
 
     el.addEventListener('mouseenter', function () {
@@ -339,7 +340,6 @@ FAR.WM._renderStartMenu = function (query) {
         list.appendChild(row);
     });
 
-    // Добавляем кнопку "Настройки автозапуска" в самый низ
     const astBtn = document.createElement('div');
     astBtn.className = 'wm-start-item';
     astBtn.style.marginTop = '10px';
@@ -348,7 +348,6 @@ FAR.WM._renderStartMenu = function (query) {
     astBtn.innerHTML = '<span class="wm-si-emoji">🚀</span><span class="wm-si-label">Настройки автозапуска</span>';
     astBtn.title = 'Управление автозапуском';
 
-    // Используем pointerup для поддержки тачскрина
     astBtn.addEventListener('pointerup', function(e) {
         e.preventDefault();
         e.stopPropagation();
@@ -461,7 +460,6 @@ FAR.WM.logout = function () {
             return;
         }
 
-        // Если есть pkg или appId — это приложение
         if (s.pkg && window.AndroidBridge &&
             typeof window.AndroidBridge.launchApp === 'function') {
             try { window.AndroidBridge.launchApp(s.pkg, s.act); }

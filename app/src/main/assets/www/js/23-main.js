@@ -98,7 +98,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     // ============================================================
-    // ЗАПУСК АВТОЗАПУСКА (ВСЕГДА, ДО ПОДКЛЮЧЕНИЯ К БД)
+    // ЗАПУСК АВТОЗАПУСКА
     // ============================================================
     if (typeof FAR.Autostart !== 'undefined') {
         setTimeout(() => {
@@ -113,13 +113,26 @@ document.addEventListener('DOMContentLoaded', async function() {
     const savedRight  = (typeof FAR.loadSideConnFromLS === 'function')
         ? FAR.loadSideConnFromLS('right') : null;
 
-    const saved = savedGlobal || savedLeft || savedRight;
+    let saved = savedGlobal || savedLeft || savedRight;
+
+    // ИСПРАВЛЕНИЕ: Если сохранен 127.0.0.1, но мы зашли с другого IP,
+    // заменяем адрес на текущий origin (чтобы не было зависания).
+    if (saved && saved.url) {
+        if (saved.url.includes('127.0.0.1') && location.hostname !== '127.0.0.1' && location.hostname !== 'localhost') {
+            console.log('[AutoConnect] Replacing 127.0.0.1 with current origin:', location.origin);
+            saved.url = location.origin;
+        }
+    }
 
     if (saved) {
         FAR.setStatus('🔌 Подключение с сохранёнными данными…');
         FAR.showLoading('Подключение к FileServer…', saved.url);
         try {
-            const res = await FAR.connectToDb(saved);
+            // Добавляем таймаут на подключение, чтобы не зависать навсегда
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Таймаут подключения к серверу (10 сек)')), 10000)
+            );
+            const res = await Promise.race([FAR.connectToDb(saved), timeoutPromise]);
 
             FAR.applyConnectionToBoth(saved, res.db, res.fullUrl);
 
@@ -162,7 +175,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
             FAR.updateAuthUI();
             FAR.setStatus('❌ Ошибка автоподключения: ' + e.message);
-            FAR.toast('Не удалось подключиться с сохранёнными данными', 'error');
+            FAR.toast('Не удалось подключиться: ' + e.message, 'error');
             FAR.openConnModal(true);
         }
     } else {

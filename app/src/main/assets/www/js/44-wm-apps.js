@@ -437,7 +437,6 @@ FAR.WM.registerApp({
                 data = FAR.Autostart._getLocal();
             }
 
-            // Получаем списки доступных приложений для добавления
             const availableWM = FAR.WM.getApps().filter(a => a.id !== 'autostart_settings' && a.id !== 'dbpick');
             const availableAndroid = (FAR.AndroidPrograms && FAR.AndroidPrograms.apps) ? FAR.AndroidPrograms.apps : [];
 
@@ -445,7 +444,6 @@ FAR.WM.registerApp({
                 <h3 style="margin-top:0; color:#89b4fa;">Настройки автозапуска (клиент)</h3>
                 <p style="font-size:12px;color:#a6adc8;">Эти настройки применяются только к текущему устройству. Серверные настройки (config.json) применяются ко всем.</p>
 
-                <!-- JS СКРИПТЫ -->
                 <div style="background:#181825; padding:12px; border-radius:6px; margin-bottom:16px;">
                     <h4 style="margin-top:0; color:#a6e3a1;">JS Скрипты</h4>
                     <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center;">
@@ -453,8 +451,7 @@ FAR.WM.registerApp({
                         <button id="astBtnAddJs" style="padding:6px 12px; background:#a6e3a1; color:#1e1e2e; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Добавить</button>
                     </div>
                     <div style="font-size:10px; color:#6c7086; margin-bottom:8px;">
-                        Путь указывается относительно папки <b>www</b> (например: <code>js/custom.js</code>).<br>
-                        Можно использовать полные URL (например: <code>http://site.com/script.js</code>).
+                        Путь указывается относительно папки <b>www</b> (например: <code>js/custom.js</code>).
                     </div>
                     <div style="display:flex; flex-direction:column; gap:4px;">
                         ${(data.jsScripts || []).map(s => `<div style="display:flex; justify-content:space-between; align-items:center; background:#313244; padding:6px 10px; border-radius:4px;">
@@ -464,7 +461,6 @@ FAR.WM.registerApp({
                     </div>
                 </div>
 
-                <!-- WM ПРИЛОЖЕНИЯ -->
                 <div style="background:#181825; padding:12px; border-radius:6px; margin-bottom:16px;">
                     <h4 style="margin-top:0; color:#a6e3a1;">Приложения FileServer</h4>
                     <div style="display:flex; gap:8px; margin-bottom:12px;">
@@ -482,7 +478,6 @@ FAR.WM.registerApp({
                     </div>
                 </div>
 
-                <!-- ANDROID ПРИЛОЖЕНИЯ -->
                 <div style="background:#181825; padding:12px; border-radius:6px;">
                     <h4 style="margin-top:0; color:#a6e3a1;">Android Приложения</h4>
                     ${availableAndroid.length === 0 ? `
@@ -490,13 +485,19 @@ FAR.WM.registerApp({
                             ⚠️ Нет доступных Android-приложений.<br>Список отображается только при работе внутри приложения на Android-устройстве.
                         </div>
                     ` : ''}
-                    <div style="display:flex; gap:8px; margin-bottom:12px;">
-                        <select id="astAddAndroidSelect" style="flex:1; padding:6px 10px; background:#313244; border:1px solid #45475a; border-radius:4px; color:#cdd6f4; font-size:12px;">
-                            <option value="">-- Выберите приложение --</option>
-                            ${availableAndroid.map(a => `<option value="${a.pkg}|${a.activity}">${a.label}</option>`).join('')}
-                        </select>
-                        <button id="astBtnAddAndroid" style="padding:6px 12px; background:#a6e3a1; color:#1e1e2e; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Добавить</button>
+
+                    <div style="margin-bottom:12px;">
+                        <button id="astBtnShowAndroidList" style="width:100%; padding:8px; background:#45475a; color:#cdd6f4; border:none; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">+ Добавить Android приложение</button>
+                        <div id="astAndroidListContainer" style="display:none; margin-top:8px; max-height:250px; overflow-y:auto; background:#181825; border:1px solid #45475a; border-radius:4px;">
+                            ${availableAndroid.map(a => `
+                                <div class="ast-android-item" data-pkg="${a.pkg}" data-act="${a.activity || ''}" data-label="${FAR.escapeHtml(a.label)}" style="display:flex; align-items:center; gap:10px; padding:8px 12px; cursor:pointer; border-bottom:1px solid #313244; transition:background 0.1s;" onmouseover="this.style.background='#313244'" onmouseout="this.style.background='transparent'">
+                                    ${a.icon ? `<img src="${a.icon}" style="width:28px; height:28px; object-fit:contain; border-radius:6px;">` : '<span style="font-size:24px;">📱</span>'}
+                                    <span style="font-size:13px;">${FAR.escapeHtml(a.label)}</span>
+                                </div>
+                            `).join('') || '<div style="padding:12px; font-size:12px; color:#6c7086; text-align:center;">Нет приложений</div>'}
+                        </div>
                     </div>
+
                     <div style="display:flex; flex-direction:column; gap:4px;">
                         ${(data.androidApps || []).map(a => `<div style="display:flex; justify-content:space-between; align-items:center; background:#313244; padding:6px 10px; border-radius:4px;">
                             <span style="font-size:12px;">${FAR.escapeHtml(a.label || a.pkg)}</span>
@@ -508,7 +509,7 @@ FAR.WM.registerApp({
 
             win.bodyEl.innerHTML = html;
 
-            // Обработчики JS
+            // JS Handlers
             win.bodyEl.querySelector('#astBtnAddJs').onclick = () => {
                 const url = win.bodyEl.querySelector('#astAddJsUrl').value.trim();
                 if (url) {
@@ -520,7 +521,7 @@ FAR.WM.registerApp({
                 btn.onclick = () => { FAR.Autostart.removeJsScript(btn.dataset.url); render(); };
             });
 
-            // Обработчики WM
+            // WM Handlers
             win.bodyEl.querySelector('#astBtnAddWm').onclick = () => {
                 const sel = win.bodyEl.querySelector('#astAddWmSelect');
                 const id = sel.value;
@@ -534,19 +535,22 @@ FAR.WM.registerApp({
                 btn.onclick = () => { FAR.Autostart.removeWmApp(btn.dataset.id); render(); };
             });
 
-            // Обработчики Android
-            win.bodyEl.querySelector('#astBtnAddAndroid').onclick = () => {
-                const sel = win.bodyEl.querySelector('#astAddAndroidSelect');
-                const val = sel.value;
-                if (val) {
-                    const parts = val.split('|');
-                    const pkg = parts[0];
-                    const act = parts[1] || '';
-                    const app = availableAndroid.find(a => a.pkg === pkg && a.activity === act);
-                    FAR.Autostart.addAndroidApp(pkg, act, app ? app.label : pkg);
-                    render();
-                }
+            // Android Handlers
+            win.bodyEl.querySelector('#astBtnShowAndroidList').onclick = function() {
+                const container = win.bodyEl.querySelector('#astAndroidListContainer');
+                container.style.display = container.style.display === 'none' ? 'block' : 'none';
             };
+
+            win.bodyEl.querySelectorAll('.ast-android-item').forEach(item => {
+                item.onclick = () => {
+                    const pkg = item.dataset.pkg;
+                    const act = item.dataset.act;
+                    const label = item.dataset.label;
+                    FAR.Autostart.addAndroidApp(pkg, act, label);
+                    render();
+                };
+            });
+
             win.bodyEl.querySelectorAll('.ast-del-android').forEach(btn => {
                 btn.onclick = () => { FAR.Autostart.removeAndroidApp(btn.dataset.pkg, btn.dataset.act); render(); };
             });

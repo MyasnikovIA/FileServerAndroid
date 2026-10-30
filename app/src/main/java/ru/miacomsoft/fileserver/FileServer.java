@@ -1,7 +1,6 @@
 package ru.miacomsoft.fileserver;
 
 import com.sun.net.httpserver.HttpExchange;
-
 import org.json.JSONException;
 
 import java.io.IOException;
@@ -12,11 +11,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Статический фасад над FileServerAndroid.
- * ApiHandler / AuthService / RootHandler / StaticHandler / SseHandler /
- * ConsoleHandler обращаются к FileServer.xxx() и работают без изменений.
- */
 public class FileServer {
 
     private static Config config;
@@ -26,10 +20,12 @@ public class FileServer {
     private static Path webRoot;
     private static StaticHandler staticHandler;
     private static RootHandler rootHandler;
+    private static FileServerAndroid instance; // Ссылка на инстанс для вызова методов
 
     static final Map<String, SseConnection> sseClients = new ConcurrentHashMap<>();
 
     static void bind(FileServerAndroid inst) {
+        instance = inst;
         config = inst.config();
         tokens = inst.tokens();
         auth = inst.auth();
@@ -40,6 +36,7 @@ public class FileServer {
     }
 
     static void unbind() {
+        instance = null;
         config = null;
         tokens = null;
         auth = null;
@@ -50,42 +47,20 @@ public class FileServer {
         sseClients.clear();
     }
 
-    // ============================================================
-    // Аксессоры
-    // ============================================================
+    static Config config() { return config; }
+    static AuthService auth() { return auth; }
+    static TokenService tokens() { return tokens; }
+    static QuotaService quota() { return quota; }
+    static Path webRoot() { return webRoot; }
+    static RootHandler rootHandler() { return rootHandler; }
+    static StaticHandler staticHandler() { return staticHandler; }
 
-    static Config config() {
-        return config;
+    // Позволяет ApiHandler'у обновлять список USB-дисков "на лету"
+    static void remountExternalDrives() {
+        if (instance != null) {
+            instance.mountExternalDrives();
+        }
     }
-
-    static AuthService auth() {
-        return auth;
-    }
-
-    static TokenService tokens() {
-        return tokens;
-    }
-
-    static QuotaService quota() {
-        return quota;
-    }
-
-    static Path webRoot() {
-        return webRoot;
-    }
-
-    static RootHandler rootHandler() {
-        return rootHandler;
-    }
-
-    static StaticHandler staticHandler() {
-        return staticHandler;
-    }
-
-
-    // ============================================================
-    // Общие утилиты
-    // ============================================================
 
     static void broadcastEvent(String event, String data) {
         for (Map.Entry<String, SseConnection> e : sseClients.entrySet()) {

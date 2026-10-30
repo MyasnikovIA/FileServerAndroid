@@ -1,10 +1,14 @@
 package ru.miacomsoft.fileserver;
 
 import android.content.Context;
+import android.os.Build;
+import android.os.storage.StorageManager;
+import android.os.storage.StorageVolume;
 import android.util.Log;
 
 import com.sun.net.httpserver.HttpServer;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -17,11 +21,6 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.stream.Stream;
 
-/**
- * Облегчённый сервер для Android.
- * Только HTTP, файловый менеджер. Без консоли, Ollama, GPU, VideoChat, Proxy.
- * Web-часть и config.json читаются из assets.
- */
 public class FileServerAndroid {
 
     private static final String TAG = "FileServerAndroid";
@@ -43,10 +42,6 @@ public class FileServerAndroid {
         this.context = ctx.getApplicationContext();
     }
 
-    // ============================================================
-    // Старт / стоп
-    // ============================================================
-
     public void start() throws Exception {
         prepareWebRoot();
         prepareConfig();
@@ -56,7 +51,6 @@ public class FileServerAndroid {
         config.host = "0.0.0.0";
         config.port = 8080;
 
-        // Явное отключение всего, что не нужно на Android
         config.httpsEnabled      = false;
         config.videoChatEnabled  = false;
         config.hermesEnabled     = false;
@@ -71,8 +65,6 @@ public class FileServerAndroid {
         staticHandler = new StaticHandler(webRoot);
         rootHandler   = new RootHandler(staticHandler);
 
-        // Регистрируем статический фасад ДО старта сервера,
-        // чтобы ApiHandler / SseHandler / RootHandler видели config/auth/quota.
         FileServer.bind(this);
 
         HttpServer srv = HttpServer.create(
@@ -86,7 +78,16 @@ public class FileServerAndroid {
         srv.start();
         server = srv;
 
-        startWatcher();
+        // Асинхронное сканирование дисков и запуск вотчера (чтобы не блокировать сервер)
+        new Thread(() -> {
+            try {
+                mountExternalDrives();
+                startWatcher();
+            } catch (Exception e) {
+                Log.e(TAG, "Async disk init failed", e);
+            }
+        }, "DiskScanner").start();
+
         Log.i(TAG, "Started on " + config.host + ":" + config.port + ", web=" + webRoot);
     }
 
@@ -130,9 +131,81 @@ public class FileServerAndroid {
         return "127.0.0.1";
     }
 
-    // ============================================================
-    // assets → files
-    // ============================================================
+    public void mountExternalDrives() {
+        try {
+            StorageManager sm = (StorageManager) context.getSystemService(Context.STORAGE_SERVICE);
+            if (sm != null) {
+                List<StorageVolume> volumes = sm.getStorageVolumes();
+                for (StorageVolume vol : volumes) {
+                    if (Build.VERSION.SDK_INT >= 30 && vol.isPrimary()) continue;
+
+                    File dir = null;
+                    if (Build.VERSION.SDK_INT >= 30) {
+                        dir = vol.getDirectory();
+                    }
+
+                    // Резервный метод для старых Android или если getDirectory вернул null
+                    if (dir == null) {
+                        String uuid = vol.getUuid();
+                        if (uuid != null) dir = new File("/storage/" + uuid);
+                    }
+
+                    // Проверяем, что путь существует и доступен для чтения (избегаем /mnt/media_rw)
+                    if (dir != null && dir.exists() && dir.isDirectory() && dir.canRead()) {
+                        addShareIfMissing(vol.getDescription(context), dir);
+                    }
+                }
+            }
+
+            // Резервный поиск в /storage для ТВ-приставок
+            File[] storageDirs = new File("/storage").listFiles();
+            if (storageDirs != null) {
+                for (File f : storageDirs) {
+                    if (f.isDirectory() && !f.getName().equals("emulated") && !f.getName().equals("self")) {
+                        if (f.canRead()) {
+                            addShareIfMissing("USB_" + f.getName(), f);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to auto-mount USB drives", e);
+        }
+    }
+
+    private synchronized void addShareIfMissing(String rawName, File dir) {
+        if (config == null) return;
+
+        String volName = rawName != null ? rawName.replaceAll("[^a-zA-Z0-9_\\-]", "_") : "External_Drive";
+        if (volName.isEmpty()) volName = "External_Drive";
+
+        // Проверяем, не добавлен ли уже этот путь
+        for (Config.Share sh : config.shares) {
+            if (dir.getAbsolutePath().equals(sh.physical)) return;
+        }
+
+        // Генерируем уникальное имя
+        String baseName = volName;
+        int counter = 1;
+        while (config.findShare(volName) != null) {
+            volName = baseName + "_" + counter++;
+        }
+
+        Config.Share usbShare = new Config.Share();
+        usbShare.name = volName;
+        usbShare.physical = dir.getAbsolutePath();
+        usbShare.type = "folder";
+        usbShare.access.add("read");
+        usbShare.access.add("write");
+        usbShare.access.add("delete");
+
+        for (String user : config.users.keySet()) {
+            usbShare.users.add(user);
+        }
+
+        config.shares.add(usbShare);
+        Log.i(TAG, "Auto-mounted USB share: " + volName + " -> " + dir.getAbsolutePath());
+    }
 
     private void prepareWebRoot() throws IOException {
         Path filesDir = context.getFilesDir().toPath();
@@ -155,14 +228,6 @@ public class FileServerAndroid {
         this.configTemp = cfg;
     }
 
-    /**
-     * Копирует asset-папку рекурсивно в dst.
-     *
-     * ВАЖНО: Files.copy(InputStream, Path, REPLACE_EXISTING) на некоторых
-     * OEM-прошивках (замечено на RK3528 / Mali) игнорирует REPLACE_EXISTING
-     * и бросает FileAlreadyExistsException. Поэтому используем явный
-     * OutputStream с CREATE + TRUNCATE_EXISTING.
-     */
     private void copyAssetFolder(String assetPath, Path dst) throws IOException {
         String[] children;
         try {
@@ -171,7 +236,6 @@ public class FileServerAndroid {
             return;
         }
         if (children == null || children.length == 0) {
-            // Это файл — копируем содержимое
             try {
                 Files.deleteIfExists(dst);
             } catch (IOException ignored) {}
@@ -198,13 +262,6 @@ public class FileServerAndroid {
         }
     }
 
-    /**
-     * Удаляет директорию рекурсивно.
-     *
-     * ВАЖНО: Files.walk() возвращает Stream, который ОБЯЗАТЕЛЬНО надо
-     * закрыть. Иначе на Android вложенные директории могут остаться,
-     * и последующее копирование упадёт с FileAlreadyExistsException.
-     */
     private static void deleteRecursive(Path p) throws IOException {
         if (p == null || !Files.exists(p)) return;
 
@@ -213,7 +270,6 @@ public class FileServerAndroid {
             walk.forEach(all::add);
         }
 
-        // Сортируем от самых глубоких к самым верхним
         all.sort((a, b) -> b.getNameCount() - a.getNameCount());
 
         for (Path x : all) {
@@ -237,10 +293,6 @@ public class FileServerAndroid {
             }
         }
     }
-
-    // ============================================================
-    // Аксессоры для FileServer.bind()
-    // ============================================================
 
     Config config()          { return config; }
     AuthService auth()       { return auth; }

@@ -269,6 +269,7 @@ public class ApiHandler implements HttpHandler {
     private void handleInfo(HttpExchange ex, String method, AuthService.Session s)
             throws Exception {
         if (!"GET".equals(method)) { FileServer.sendError(ex, 405, "Method not allowed"); return; }
+
         JSONObject info = new JSONObject();
         info.put("type", "filesystem");
         info.put("version", "1.6-android");
@@ -285,8 +286,12 @@ public class ApiHandler implements HttpHandler {
         if (s.user != null && s.user.hasQuota()) userQuotaMb = s.user.quotaMb;
         info.put("userQuotaMb", userQuotaMb);
         info.put("userUsedBytes", FileServer.quota().getUserUsedBytes(s));
+
         JSONArray sharesArr = new JSONArray();
-        for (Config.Share sh : FileServer.config().shares) {
+        // Безопасная копия списка для предотвращения ConcurrentModificationException
+        List<Config.Share> sharesCopy = new ArrayList<>(FileServer.config().shares);
+
+        for (Config.Share sh : sharesCopy) {
             if (!FileServer.auth().shareVisible(s, sh)) continue;
             JSONObject so = new JSONObject();
             so.put("name", sh.isRoot() ? "" : sh.name);
@@ -340,7 +345,10 @@ public class ApiHandler implements HttpHandler {
     private JSONArray listRoot(AuthService.Session s) throws Exception {
         JSONArray arr = new JSONArray();
         Set<String> explicitNames = new HashSet<>();
-        for (Config.Share sh : FileServer.config().shares) {
+
+        List<Config.Share> sharesCopy = new ArrayList<>(FileServer.config().shares);
+
+        for (Config.Share sh : sharesCopy) {
             if (!sh.isRoot()) explicitNames.add(sh.name);
         }
         Config.Share rootShare = FileServer.config().findRootShare();
@@ -357,7 +365,7 @@ public class ApiHandler implements HttpHandler {
                 System.err.println("[listRoot] root share not available: " + e.getMessage());
             }
         }
-        for (Config.Share sh : FileServer.config().shares) {
+        for (Config.Share sh : sharesCopy) {
             if (sh.isRoot()) continue;
             if (!FileServer.auth().shareVisible(s, sh)) continue;
             arr.put(shareEntry(sh));

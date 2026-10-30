@@ -1,14 +1,5 @@
 package ru.miacomsoft.fileserver;
 
-// ============================================================
-// QuotaService.java — кэширующий подсчёт занятого места.
-//
-// Для share:   сумма размеров файлов внутри физического пути.
-// Для user:    сумма по всем видимым shares.
-//
-// Кэш: TTL 5 секунд. Инвалидация при write/delete/move/copy.
-// ============================================================
-
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -32,9 +23,9 @@ public class QuotaService {
         this.auth = auth;
     }
 
-    // ---------- Размер share ----------
-
     public long getShareUsedBytes(Config.Share share) {
+        if (share == null || !share.hasQuota()) return 0;
+
         Path p = share.physicalPath();
         String key = "share:" + p.toString();
         Entry e = cache.get(key);
@@ -49,18 +40,18 @@ public class QuotaService {
         return size;
     }
 
-    // ---------- Размер пользователя ----------
-
     public long getUserUsedBytes(AuthService.Session s) {
         if (s == null) return 0;
+
         if (s.anonymous) {
-            // Для анонима — только публичные shares
             long total = 0;
             for (Config.Share sh : auth.config().shares) {
                 if (sh.anonymous) total += getShareUsedBytes(sh);
             }
             return total;
         }
+
+        if (s.user != null && !s.user.hasQuota()) return 0;
 
         String key = "user:" + s.username;
         Entry e = cache.get(key);
@@ -79,62 +70,41 @@ public class QuotaService {
         return total;
     }
 
-    // ---------- Проверка перед записью ----------
-
-    /**
-     * @param share       целевой share
-     * @param session     сессия
-     * @param deltaBytes  добавка (newSize - oldSize); может быть отрицательной
-     * @throws QuotaExceededException если лимит превышен
-     */
     public void checkWriteQuota(Config.Share share, AuthService.Session session,
                                 long deltaBytes) throws QuotaExceededException {
-        if (deltaBytes <= 0) return;   // уменьшение — не проверяем
+        if (deltaBytes <= 0) return;
 
-        // Share quota
         if (share.hasQuota()) {
             long used = getShareUsedBytes(share);
             long limit = share.quotaMb * MB;
             if (used + deltaBytes > limit) {
                 throw new QuotaExceededException(
-                        "Share quota exceeded",
-                        share.name,
-                        share.quotaMb,
-                        used,
-                        limit - used,
-                        deltaBytes);
+                        "Share quota exceeded", share.name, share.quotaMb,
+                        used, limit - used, deltaBytes);
             }
         }
 
-        // User quota (для авторизованных)
         if (session != null && !session.anonymous && session.user != null
                 && session.user.hasQuota()) {
             long used = getUserUsedBytes(session);
             long limit = session.user.quotaMb * MB;
             if (used + deltaBytes > limit) {
                 throw new QuotaExceededException(
-                        "User quota exceeded",
-                        session.user.name,
-                        session.user.quotaMb,
-                        used,
-                        limit - used,
-                        deltaBytes);
+                        "User quota exceeded", session.user.name, session.user.quotaMb,
+                        used, limit - used, deltaBytes);
             }
         }
     }
 
-    // ---------- Инвалидация ----------
-
     public void invalidate(Config.Share share) {
+        if (share == null) return;
         cache.remove("share:" + share.physicalPath().toString());
-        cache.clear();   // для простоты — сбрасываем весь кэш
+        cache.clear();
     }
 
     public void invalidateAll() {
         cache.clear();
     }
-
-    // ---------- Вспомогательное ----------
 
     private long safeSize(Path p) {
         if (p == null || !Files.exists(p)) return 0L;
@@ -157,8 +127,6 @@ public class QuotaService {
         } catch (IOException ignored) {}
         return total[0];
     }
-
-    // ---------- Исключение ----------
 
     public static class QuotaExceededException extends Exception {
         public String scope;

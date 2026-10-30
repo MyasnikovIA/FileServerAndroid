@@ -50,12 +50,16 @@ FAR.Autostart = {
                 try {
                     await FAR.loadScriptOnce(script.url);
                     console.log('[Autostart] Loaded script:', script.url);
-                } catch(e) { console.error('[Autostart] Script error:', script.url, e); }
+                } catch(e) {
+                    console.error('[Autostart] Script error (ignored):', script.url, e);
+                }
             } else if (script.code) {
                 try {
                     new Function(script.code)();
                     console.log('[Autostart] Executed inline script:', script.name || 'unnamed');
-                } catch(e) { console.error('[Autostart] Inline script error:', e); }
+                } catch(e) {
+                    console.error('[Autostart] Inline script error (ignored):', e);
+                }
             }
         }
 
@@ -65,7 +69,7 @@ FAR.Autostart = {
                 try {
                     window.AndroidBridge.launchApp(app.pkg, app.act || '');
                     console.log('[Autostart] Launched Android app:', app.pkg);
-                } catch(e) { console.warn('[Autostart] Failed to launch app:', app.pkg, e); }
+                } catch(e) { console.warn('[Autostart] Failed to launch app (ignored):', app.pkg, e); }
             }
         }
 
@@ -75,13 +79,11 @@ FAR.Autostart = {
                 try {
                     FAR.WM.openApp(w.id, { props: w.props || {} });
                     console.log('[Autostart] Opened WM app:', w.id);
-                } catch(e) { console.warn('[Autostart] Failed to open WM app:', w.id, e); }
+                } catch(e) { console.warn('[Autostart] Failed to open WM app (ignored):', w.id, e); }
             }
         }
         console.log('[Autostart] Boot sequence complete.');
     },
-
-    // --- Методы добавления ---
 
     addAndroidApp: function(pkg, act, label) {
         const data = this._getLocal();
@@ -124,8 +126,6 @@ FAR.Autostart = {
         this._saveLocal(data);
         FAR.toast('Скрипт добавлен в автозапуск', 'success');
     },
-
-    // --- Методы удаления ---
 
     removeAndroidApp: function(pkg, act) {
         const data = this._getLocal();
