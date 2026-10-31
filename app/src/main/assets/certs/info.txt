@@ -118,3 +118,9 @@ root@myasnikovia-M2-Air:/home/myasnikovia/JavaProject/Sertifikat_del/live/smwrap
 cert.pem  chain.pem  fullchain.pem  privkey.pem  README
 root@myasnikovia-M2-Air:/home/myasnikovia/JavaProject/Sertifikat_del/live/smwrap.ru#
 ```
+
+
+    #"keystore": "assets:certs/keystore.p12"   → копируется из assets в кэш при первом запуске
+    #"keystore": "certs/keystore.p12"          → внешний filesDir (user-writable)
+    #"keystore": "/sdcard/certs/keystore.p12"  → абсолютный путь как есть
+

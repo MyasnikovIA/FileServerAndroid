@@ -63,18 +63,14 @@ public class FileServerAndroid {
         prepareConfig();
 
         config = Config.load(configTemp);
-
-        // host/port — для Android всегда 0.0.0.0:8080
         config.host = "0.0.0.0";
         config.port = 8080;
 
-        // Эти функции на Android не поддерживаются — отключаем.
-        // ВАЖНО: httpsEnabled НЕ трогаем — уважаем настройку из config.json.
-        config.videoChatEnabled  = false;
-        config.hermesEnabled     = false;
-        config.ollamaEnabled     = false;
-        config.consoleShell      = "";
-        config.consoleCwd        = "";
+        config.videoChatEnabled = false;
+        config.hermesEnabled    = false;
+        config.ollamaEnabled    = false;
+        config.consoleShell     = "";
+        config.consoleCwd       = "";
 
         tokens = new TokenService();
         auth   = new AuthService(config, tokens);
@@ -106,8 +102,6 @@ public class FileServerAndroid {
                             + " — falling back to HTTP: " + e.getMessage(), e);
                 }
             } else {
-                // Файл ещё не положен. Создаём каталог, чтобы пользователь
-                // мог просто положить туда keystore.p12 и перезапустить.
                 Path parent = keystorePath.getParent();
                 if (parent != null && !Files.exists(parent)) {
                     try {
@@ -122,21 +116,31 @@ public class FileServerAndroid {
             }
         }
 
-        actualProtocol = httpsMode ? "https" : "http";
-
         // ============================================================
-        // Создание сервера
+        // Создание сервера (с fallback HTTPS → HTTP)
         // ============================================================
-        HttpServer srv;
+        HttpServer srv = null;
         InetSocketAddress addr = new InetSocketAddress(config.host, config.port);
+        actualProtocol = "http";
 
         if (httpsMode) {
-            HttpsServer httpsSrv = HttpsServer.create(addr, 0);
-            httpsSrv.setHttpsConfigurator(new HttpsConfigurator(sslContext));
-            srv = httpsSrv;
-            Log.i(TAG, "Starting HTTPS server on " + addr);
-        } else {
+            try {
+                HttpsServer httpsSrv = HttpsServer.create(addr, 0);
+                httpsSrv.setHttpsConfigurator(new HttpsConfigurator(sslContext));
+                srv = httpsSrv;
+                actualProtocol = "https";
+                Log.i(TAG, "Starting HTTPS server on " + addr);
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to create HTTPS server — falling back to HTTP: "
+                        + e.getMessage(), e);
+                httpsMode = false;
+                srv = null;
+            }
+        }
+
+        if (srv == null) {
             srv = HttpServer.create(addr, 0);
+            actualProtocol = "http";
             Log.i(TAG, "Starting HTTP server on " + addr);
         }
 
@@ -189,12 +193,13 @@ public class FileServerAndroid {
     }
 
     /**
-     * URL для локального WebView (всегда 127.0.0.1).
-     * Протокол соответствует фактическому режиму сервера (http/https).
+     * URL для локального WebView.
+     * Используем реальный IP, а не 127.0.0.1, чтобы WebView
+     * не ругался на несовпадение SAN в самоподписанном сертификате.
      */
     public String getLocalUrl() {
         int port = (config != null) ? config.port : 8080;
-        return actualProtocol + "://127.0.0.1:" + port;
+        return actualProtocol + "://" + getLocalIpAddress() + ":" + port + "/";
     }
 
     /**
@@ -549,14 +554,25 @@ public class FileServerAndroid {
 
     private void prepareConfig() throws IOException {
         Path filesDir = context.getFilesDir().toPath();
-        Path cfg = filesDir.resolve("config.json");
+        Path internalCfg = filesDir.resolve("config.json");
 
-        if (!Files.exists(cfg)) {
+        // Проверяем, есть ли config.json в публичной папке Download
+        // Если есть — используем его (удобно для отладки)
+        Path externalCfg = java.nio.file.Paths.get("/storage/emulated/0/Download/config.json");
+
+        if (Files.exists(externalCfg)) {
+            Log.i(TAG, "Using external config: " + externalCfg);
+            this.configTemp = externalCfg;
+            return;
+        }
+
+        // Иначе — стандартная логика (копируем из assets, если нет внутреннего)
+        if (!Files.exists(internalCfg)) {
             try (InputStream is = context.getAssets().open("config.json")) {
-                Files.copy(is, cfg);
+                Files.copy(is, internalCfg);
             }
         }
-        this.configTemp = cfg;
+        this.configTemp = internalCfg;
     }
 
     private void copyAssetFolder(String assetPath, Path dst) throws IOException {

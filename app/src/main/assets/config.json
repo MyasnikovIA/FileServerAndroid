@@ -6,10 +6,7 @@
 
   "https": {
     "enabled": true,
-    "keystore": "assets:certs/keystore.p12",
-    #"keystore": "assets:certs/keystore.p12"   → копируется из assets в кэш при первом запуске
-    #"keystore": "certs/keystore.p12"          → внешний filesDir (user-writable)
-    #"keystore": "/sdcard/certs/keystore.p12"  → абсолютный путь как есть
+    "keystore": "/storage/emulated/0/Download/certs/keystore.p12",
     "password": "changeit"
   },
 

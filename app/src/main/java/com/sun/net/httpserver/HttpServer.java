@@ -23,17 +23,21 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class HttpServer {
 
-    private final InetSocketAddress address;
-    private final List<HttpContext> contexts = new ArrayList<>();
-    private final Set<Socket> activeSockets = ConcurrentHashMap.newKeySet();
+    protected final InetSocketAddress address;   // ← ИЗМЕНЕНО: private → protected
+    protected final int backlog;                 // ← ИЗМЕНЕНО: новое поле
+    protected ServerSocket serverSocket;         // ← ИЗМЕНЕНО: private → protected
 
-    private ServerSocket serverSocket;
-    private Thread acceptorThread;
-    private Executor executor;
-    private final AtomicBoolean running = new AtomicBoolean(false);
+    protected final List<HttpContext> contexts = new ArrayList<>();
+    protected final Set<Socket> activeSockets = ConcurrentHashMap.newKeySet();
 
-    private HttpServer(InetSocketAddress address, int backlog) {
+    protected Thread acceptorThread;
+    protected Executor executor;
+    protected final AtomicBoolean running = new AtomicBoolean(false);
+
+    // ← ИЗМЕНЕНО: private → protected, сохраняем backlog
+    protected HttpServer(InetSocketAddress address, int backlog) {
         this.address = address;
+        this.backlog = backlog;
     }
 
     public static HttpServer create(InetSocketAddress addr, int backlog) throws IOException {
@@ -101,6 +105,8 @@ public class HttpServer {
 
     private void handleConnection(Socket socket) {
         try {
+            // При использовании SSLServerSocket именно этот вызов запускает TLS-рукопожатие (Handshake).
+            // Если клиент (например, WebView) отклоняет сертификат, здесь выбросится SSLHandshakeException.
             InputStream in = new BufferedInputStream(socket.getInputStream());
             OutputStream out = socket.getOutputStream();
 
@@ -157,8 +163,14 @@ public class HttpServer {
             } finally {
                 exchange.close();
             }
+        } catch (javax.net.ssl.SSLException sslEx) {
+            // Перехватываем ошибки TLS/SSL.
+            // Это ожидаемое поведение, если клиент (браузер) отклоняет сертификат.
+            // Логируем КРАТКО, без стектрейса, чтобы не засорять Logcat.
+            android.util.Log.w("HttpServer", "SSL connection rejected by client: " + sslEx.getMessage());
         } catch (Exception e) {
-            try { socket.close(); } catch (IOException ignored) {}
+            // Все остальные ошибки (сетевые, обрывы соединения)
+            android.util.Log.e("HttpServer", "Connection error: " + e.getMessage(), e);
         } finally {
             activeSockets.remove(socket);
             try { socket.close(); } catch (IOException ignored) {}
