@@ -24,7 +24,9 @@ public class FileServer {
     private static volatile RootHandler rootHandler;
     private static volatile Path configPath;
     static final Map<String, SseConnection> sseClients = new ConcurrentHashMap<>();
+    private static volatile ServerCopyService serverCopy;
 
+    static ServerCopyService serverCopy() { return serverCopy; }
     static void bind(FileServerAndroid inst, Path cfgPath) {
         configPath = cfgPath;
         config = inst.config();
@@ -34,6 +36,7 @@ public class FileServer {
         webRoot = inst.webRoot();
         staticHandler = inst.staticHandler();
         rootHandler = inst.rootHandler();
+        serverCopy = inst.serverCopy();
     }
 
     static void unbind() {
@@ -45,6 +48,7 @@ public class FileServer {
         staticHandler = null;
         rootHandler = null;
         configPath = null;
+        serverCopy = null;
         sseClients.clear();
     }
 

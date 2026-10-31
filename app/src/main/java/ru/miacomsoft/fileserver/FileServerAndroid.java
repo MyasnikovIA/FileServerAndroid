@@ -37,6 +37,7 @@ import java.nio.file.Paths;
 import javax.net.ssl.SSLContext;
 public class FileServerAndroid {
 
+    private ServerCopyService serverCopy;
     private static final String TAG = "FileServerAndroid";
     private String actualProtocol = "http";
     private final Context context;
@@ -98,6 +99,7 @@ public class FileServerAndroid {
 
         staticHandler = new StaticHandler(webRoot);
         rootHandler   = new RootHandler(staticHandler);
+        serverCopy = new ServerCopyService();
 
         FileServer.bind(this, configTemp);
 
@@ -199,6 +201,10 @@ public class FileServerAndroid {
         if (fileWatcher != null) {
             try { fileWatcher.stop(); } catch (Exception ignored) {}
             fileWatcher = null;
+        }
+        if (serverCopy != null) {
+            try { serverCopy.shutdown(); } catch (Exception ignored) {}
+            serverCopy = null;
         }
         FileServer.unbind();
 
@@ -851,6 +857,7 @@ public class FileServerAndroid {
     AuthService auth()       { return auth; }
     TokenService tokens()    { return tokens; }
     QuotaService quota()     { return quota; }
+    ServerCopyService serverCopy() { return serverCopy; }
     Path webRoot()           { return webRoot; }
     RootHandler rootHandler(){ return rootHandler; }
     StaticHandler staticHandler() { return staticHandler; }

@@ -69,6 +69,10 @@ public class ApiHandler implements HttpHandler {
                 case "/api/delete":          handleDelete(ex, method, q, session);       return;
                 case "/api/move":            handleMove(ex, method, q, session);         return;
                 case "/api/copy":            handleCopy(ex, method, q, session);         return;
+                case "/api/server-copy":          handleServerCopy(ex, method, session);  return;
+                case "/api/server-copy/status":   handleCopyStatus(ex, method, q);        return;
+                case "/api/server-copy/list":     handleCopyList(ex, method, session);    return;
+                case "/api/server-copy/cancel":   handleCopyCancel(ex, method, q, session); return;
                 default:
                     if (tryApiSharePath(ex, path)) return;
                     FileServer.sendErrorAndClose(ex, 404, "Unknown endpoint: " + path);
@@ -924,5 +928,208 @@ public class ApiHandler implements HttpHandler {
             return;
         }
         serveFile(ex, fsPath);
+    }
+    // ============================================================
+// SERVER-COPY — копирование файлов без участия браузера
+// ============================================================
+
+    private void handleServerCopy(HttpExchange ex, String method,
+                                  AuthService.Session s) throws Exception {
+        if (!"POST".equals(method)) {
+            FileServer.sendError(ex, 405, "Method not allowed");
+            return;
+        }
+        if (FileServer.serverCopy() == null) {
+            FileServer.sendError(ex, 503, "ServerCopyService not available");
+            return;
+        }
+
+        String body = readBody(ex, 64 * 1024);
+        if (body == null || body.isEmpty()) {
+            FileServer.sendError(ex, 400, "Empty JSON body");
+            return;
+        }
+
+        JSONObject req;
+        try { req = new JSONObject(body); }
+        catch (Exception e) { FileServer.sendError(ex, 400, "Invalid JSON body"); return; }
+
+        String mode = req.optString("mode", "").trim().toLowerCase();
+        if (mode.isEmpty()) {
+            FileServer.sendError(ex, 400, "mode is required (local|push|pull|relay)");
+            return;
+        }
+
+        ServerCopyService.Task t = new ServerCopyService.Task();
+        t.mode         = mode;
+        t.username     = s == null ? null : s.username;
+        t.isAnonymous  = s == null || s.anonymous;
+
+        switch (mode) {
+            case "local":
+                t.srcPath = req.optString("srcPath", "").trim();
+                t.dstPath = req.optString("dstPath", "").trim();
+                if (t.srcPath.isEmpty() || t.dstPath.isEmpty()) {
+                    FileServer.sendError(ex, 400,
+                            "local mode requires srcPath and dstPath");
+                    return;
+                }
+                break;
+
+            case "push":
+                t.srcPath = req.optString("srcPath", "").trim();
+                t.dstUrl  = trimUrl(req.optString("dstUrl", ""));
+                t.dstPath = req.optString("dstPath", "").trim();
+                t.dstToken = req.optString("dstToken", null);
+                if (t.srcPath.isEmpty() || t.dstUrl.isEmpty() || t.dstPath.isEmpty()) {
+                    FileServer.sendError(ex, 400,
+                            "push mode requires srcPath, dstUrl, dstPath");
+                    return;
+                }
+                break;
+
+            case "pull":
+                t.srcUrl   = trimUrl(req.optString("srcUrl", ""));
+                t.srcPath  = req.optString("srcPath", "").trim();
+                t.srcToken = req.optString("srcToken", null);
+                t.dstPath  = req.optString("dstPath", "").trim();
+                if (t.srcUrl.isEmpty() || t.srcPath.isEmpty() || t.dstPath.isEmpty()) {
+                    FileServer.sendError(ex, 400,
+                            "pull mode requires srcUrl, srcPath, dstPath");
+                    return;
+                }
+                break;
+
+            case "relay":
+                t.srcUrl   = trimUrl(req.optString("srcUrl", ""));
+                t.srcPath  = req.optString("srcPath", "").trim();
+                t.srcToken = req.optString("srcToken", null);
+                t.dstUrl   = trimUrl(req.optString("dstUrl", ""));
+                t.dstPath  = req.optString("dstPath", "").trim();
+                t.dstToken = req.optString("dstToken", null);
+                if (t.srcUrl.isEmpty() || t.srcPath.isEmpty()
+                        || t.dstUrl.isEmpty() || t.dstPath.isEmpty()) {
+                    FileServer.sendError(ex, 400,
+                            "relay mode requires srcUrl, srcPath, dstUrl, dstPath");
+                    return;
+                }
+                break;
+
+            default:
+                FileServer.sendError(ex, 400, "Unknown mode: " + mode);
+                return;
+        }
+
+        ServerCopyService.Task started = FileServer.serverCopy().start(t);
+
+        JSONObject resp = new JSONObject();
+        resp.put("ok", true);
+        resp.put("taskId", started.id);
+        resp.put("task", started.toJson());
+        FileServer.sendJson(ex, 200, resp.toString());
+    }
+
+    private void handleCopyStatus(HttpExchange ex, String method,
+                                  Map<String, String> q) throws Exception {
+        if (!"GET".equals(method)) {
+            FileServer.sendError(ex, 405, "Method not allowed");
+            return;
+        }
+        String id = q.get("taskId");
+        if (id == null || id.isEmpty()) {
+            FileServer.sendError(ex, 400, "taskId is required");
+            return;
+        }
+        ServerCopyService.Task t = FileServer.serverCopy() == null
+                ? null : FileServer.serverCopy().get(id);
+        if (t == null) {
+            FileServer.sendError(ex, 404, "Task not found: " + id);
+            return;
+        }
+        FileServer.sendJson(ex, 200, t.toJson().toString());
+    }
+
+    private void handleCopyList(HttpExchange ex, String method,
+                                AuthService.Session s) throws Exception {
+        if (!"GET".equals(method)) {
+            FileServer.sendError(ex, 405, "Method not allowed");
+            return;
+        }
+        if (s == null || s.anonymous) {
+            FileServer.sendError(ex, 403, "Authenticated users only");
+            return;
+        }
+        JSONArray arr = new JSONArray();
+        ServerCopyService svc = FileServer.serverCopy();
+        if (svc != null) {
+            for (ServerCopyService.Task t : svc.list().values()) {
+                // Показываем только свои задачи, если это не admin
+                if (!Objects.equals(t.username, s.username)) continue;
+                arr.put(t.toJson());
+            }
+        }
+        JSONObject resp = new JSONObject();
+        resp.put("tasks", arr);
+        FileServer.sendJson(ex, 200, resp.toString());
+    }
+
+    private void handleCopyCancel(HttpExchange ex, String method,
+                                  Map<String, String> q,
+                                  AuthService.Session s) throws Exception {
+        if (!"POST".equals(method)) {
+            FileServer.sendError(ex, 405, "Method not allowed");
+            return;
+        }
+        String id = q.get("taskId");
+        if (id == null || id.isEmpty()) {
+            FileServer.sendError(ex, 400, "taskId is required");
+            return;
+        }
+        ServerCopyService svc = FileServer.serverCopy();
+        if (svc == null) {
+            FileServer.sendError(ex, 503, "ServerCopyService not available");
+            return;
+        }
+        ServerCopyService.Task t = svc.get(id);
+        if (t == null) {
+            FileServer.sendError(ex, 404, "Task not found: " + id);
+            return;
+        }
+        if (s != null && !s.anonymous
+                && !Objects.equals(t.username, s.username)) {
+            FileServer.sendError(ex, 403, "Not your task");
+            return;
+        }
+        boolean ok = svc.cancel(id);
+        JSONObject resp = new JSONObject();
+        resp.put("ok", ok);
+        resp.put("taskId", id);
+        FileServer.sendJson(ex, 200, resp.toString());
+    }
+
+// ------------------------------------------------------------
+// Хелперы
+// ------------------------------------------------------------
+
+    private String trimUrl(String u) {
+        if (u == null) return "";
+        u = u.trim();
+        while (u.endsWith("/")) u = u.substring(0, u.length() - 1);
+        return u;
+    }
+
+    private String readBody(HttpExchange ex, int maxBytes) throws IOException {
+        try (InputStream is = ex.getRequestBody();
+             ByteArrayOutputStream buf = new ByteArrayOutputStream()) {
+            byte[] tmp = new byte[8192];
+            int n;
+            int total = 0;
+            while ((n = is.read(tmp)) > 0) {
+                total += n;
+                if (total > maxBytes) throw new IOException("Body too large");
+                buf.write(tmp, 0, n);
+            }
+            return new String(buf.toByteArray(), StandardCharsets.UTF_8).trim();
+        }
     }
 }
