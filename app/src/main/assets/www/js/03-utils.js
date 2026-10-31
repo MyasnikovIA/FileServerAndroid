@@ -1,41 +1,58 @@
-FAR.setStatus = function(t) {
-    document.getElementById('statusText').textContent = t;
+// ============================================================
+// 03-utils.js — утилиты. Все DOM-обращения null-safe,
+// т.к. в WM-only режиме многих legacy-элементов тулбара нет.
+// ============================================================
+
+FAR.setStatus = function (t) {
+    const el = document.getElementById('statusText');
+    if (el) el.textContent = t;
 };
 
-FAR.showLoading = function(text, sub) {
-    document.getElementById('loadingOverlay').classList.remove('hidden');
-    document.getElementById('loadingText').textContent = text || '';
-    document.getElementById('loadingSub').textContent = sub || '';
-};
-FAR.updateLoadingSub = function(text) {
-    document.getElementById('loadingSub').textContent = text || '';
-};
-FAR.hideLoading = function() {
-    document.getElementById('loadingOverlay').classList.add('hidden');
+FAR.showLoading = function (text, sub) {
+    const overlay = document.getElementById('loadingOverlay');
+    const textEl  = document.getElementById('loadingText');
+    const subEl   = document.getElementById('loadingSub');
+    if (overlay) overlay.classList.remove('hidden');
+    if (textEl)  textEl.textContent = text || '';
+    if (subEl)   subEl.textContent  = sub  || '';
 };
 
-FAR.formatSize = function(b) {
+FAR.updateLoadingSub = function (text) {
+    const el = document.getElementById('loadingSub');
+    if (el) el.textContent = text || '';
+};
+
+FAR.hideLoading = function () {
+    const el = document.getElementById('loadingOverlay');
+    if (el) el.classList.add('hidden');
+};
+
+FAR.formatSize = function (b) {
     if (!b) return '0 B';
     if (b > 1073741824) return (b / 1073741824).toFixed(2) + ' GB';
-    if (b > 1048576) return (b / 1048576).toFixed(2) + ' MB';
-    if (b > 1024) return (b / 1024).toFixed(1) + ' KB';
+    if (b > 1048576)    return (b / 1048576).toFixed(2)    + ' MB';
+    if (b > 1024)       return (b / 1024).toFixed(1)       + ' KB';
     return b + ' B';
 };
 
-FAR.escapeHtml = function(s) {
+FAR.escapeHtml = function (s) {
     const d = document.createElement('div');
     d.textContent = s;
     return d.innerHTML;
 };
 
-FAR.hexPreview = function(data) {
+FAR.hexPreview = function (data) {
     return Array.from(data.slice(0, 256))
         .map(b => b.toString(16).padStart(2, '0')).join(' ');
 };
 
-FAR.toast = function(msg, type) {
+FAR.toast = function (msg, type) {
     type = type || 'info';
     const c = document.getElementById('toastContainer');
+    if (!c) {
+        console.warn('[toast] #toastContainer не найден:', msg);
+        return;
+    }
     const el = document.createElement('div');
     el.className = 'toast ' + type;
     el.textContent = msg;
@@ -46,11 +63,13 @@ FAR.toast = function(msg, type) {
     }, 3000);
 };
 
-FAR.sanitizeFileName = function(name) {
-    return String(name).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/^\.+$/, '_');
+FAR.sanitizeFileName = function (name) {
+    return String(name)
+        .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+        .replace(/^\.+$/, '_');
 };
 
-FAR.normPath = function(p) {
+FAR.normPath = function (p) {
     if (p === null || p === undefined) return '';
     let s = String(p).trim();
     if (!s) return '';
@@ -63,43 +82,26 @@ FAR.normPath = function(p) {
 /**
  * Нормализует адрес FileServer.
  *
- * Пользователь может ввести адрес без схемы:
- *   • "www.example.com:8080"   → "http://www.example.com:8080"
- *   • "example.com"            → "http://example.com"
- *   • "//example.com:8080"     → "http://example.com:8080"   (protocol-relative)
- *   • "http://example.com/"    → "http://example.com"
- *   • "https://example.com"    → "https://example.com"       (без изменений)
- *
- * Без этого fetch() падает с ошибкой:
- *   "URL scheme 'www.example.com' is not supported"
- *
- * Используется:
- *   • в FAR.connectToDb  — единая точка нормализации при подключении;
- *   • (опционально) в UI  — при показе/сохранении адреса.
- *
- * @param {string} raw
- * @returns {string} нормализованный URL или '' для пустого входа
+ *   "www.example.com:8080"   → "http://www.example.com:8080"
+ *   "example.com"            → "http://example.com"
+ *   "//example.com:8080"     → "http://example.com:8080"
+ *   "http://example.com/"    → "http://example.com"
+ *   "https://example.com"    → "https://example.com"       (без изменений)
  */
 FAR.normalizeServerUrl = function (raw) {
     let s = String(raw || '').trim();
     if (!s) return '';
 
-    // protocol-relative: //host → http://host
     if (s.startsWith('//')) {
         s = 'http:' + s;
-    }
-    // схема уже есть (http://, https://, ftp://, ws:// и т.п.) — не трогаем
-    else if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) {
+    } else if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) {
         s = 'http://' + s;
     }
-
-    // убираем хвостовые слэши (http://host:8080/ → http://host:8080)
     return s.replace(/\/+$/, '');
 };
 
 /**
  * Загружает внешний скрипт ровно один раз.
- * Возвращает Promise, который резолвится после загрузки.
  * Повторные вызовы с тем же src возвращают тот же Promise.
  */
 FAR._loadedScripts = FAR._loadedScripts || {};
@@ -126,11 +128,7 @@ FAR.loadScriptOnce = function (src) {
 // Сохранение/восстановление положения курсора (localStorage)
 // ============================================================
 
-/**
- * Сохраняет текущее состояние панелей в localStorage.
- * Вызывается при любом изменении активной панели, пути или курсора.
- */
-FAR.saveUiState = function() {
+FAR.saveUiState = function () {
     try {
         const state = {
             activePanel: FAR.activePanel,
@@ -147,11 +145,7 @@ FAR.saveUiState = function() {
     }
 };
 
-/**
- * Читает сохранённое состояние панелей из localStorage.
- * Возвращает объект или null.
- */
-FAR.loadUiState = function() {
+FAR.loadUiState = function () {
     try {
         const raw = localStorage.getItem(FAR.LS_UI_KEY);
         if (!raw) return null;
@@ -163,10 +157,7 @@ FAR.loadUiState = function() {
     }
 };
 
-/**
- * Возвращает имя файла в списке по индексу или '' если индекса нет.
- */
-FAR._getFileAt = function(list, idx) {
+FAR._getFileAt = function (list, idx) {
     if (!list || idx === null || idx === undefined) return '';
     if (idx < 0 || idx >= list.length) return '';
     const item = list[idx];
@@ -174,10 +165,7 @@ FAR._getFileAt = function(list, idx) {
     return item.name || '';
 };
 
-/**
- * Восстанавливает состояние панелей из localStorage.
- */
-FAR.restoreUiState = function() {
+FAR.restoreUiState = function () {
     const st = FAR.loadUiState();
     if (!st) return false;
 
@@ -197,8 +185,7 @@ FAR.restoreUiState = function() {
         FAR.side.left.path = st.leftPath;
         FAR.side.left._loadedDir = null;
         restorePromises.push(
-            FAR.ensureDirLoaded('left', st.leftPath, { silent: true }).catch(function(e) {
-                // Игнорируем ошибку 403/404 при автовосстановлении
+            FAR.ensureDirLoaded('left', st.leftPath, { silent: true }).catch(function (e) {
                 console.warn('[restoreUiState] Не удалось восстановить левую панель:', e.message);
             })
         );
@@ -208,14 +195,13 @@ FAR.restoreUiState = function() {
         FAR.side.right.path = st.rightPath;
         FAR.side.right._loadedDir = null;
         restorePromises.push(
-            FAR.ensureDirLoaded('right', st.rightPath, { silent: true }).catch(function(e) {
-                // Игнорируем ошибку 403/404 при автовосстановлении
+            FAR.ensureDirLoaded('right', st.rightPath, { silent: true }).catch(function (e) {
                 console.warn('[restoreUiState] Не удалось восстановить правую панель:', e.message);
             })
         );
     }
 
-    return Promise.all(restorePromises).then(function() {
+    return Promise.all(restorePromises).then(function () {
         FAR.renderPanel('left',  { skipLoad: true });
         FAR.renderPanel('right', { skipLoad: true });
 
@@ -229,12 +215,12 @@ FAR.restoreUiState = function() {
     });
 };
 
-FAR._restoreCursor = function(side, fileName, cursorIdx) {
+FAR._restoreCursor = function (side, fileName, cursorIdx) {
     const files = side === 'left' ? FAR.leftFiles : FAR.rightFiles;
     let idx = -1;
 
     if (fileName) {
-        idx = files.findIndex(function(f) { return f.name === fileName; });
+        idx = files.findIndex(function (f) { return f.name === fileName; });
     }
 
     if (idx === -1 && typeof cursorIdx === 'number' && cursorIdx >= 0 && cursorIdx < files.length) {
@@ -267,9 +253,6 @@ FAR._restoreCursor = function(side, fileName, cursorIdx) {
     }
 };
 
-/**
- * Сохраняет Blob как файл через временный <a download>.
- */
 FAR.saveBlobAs = function (blob, fileName) {
     if (!(blob instanceof Blob)) {
         throw new Error('saveBlobAs: ожидался Blob, получено ' +
@@ -293,12 +276,6 @@ FAR.saveBlobAs = function (blob, fileName) {
     }, 1000);
 };
 
-/**
- * Формирует человекочитаемую метку подключения:
- *   "admin@127.0.0.1:8080"
- *   "anonymous@127.0.0.1:8080"
- *   "— нет подключения —"
- */
 FAR.connLabel = function (conn) {
     if (!conn || !conn.url) return '— нет подключения —';
     const host = String(conn.url).replace(/^https?:\/\//, '').replace(/\/+$/, '');
@@ -306,9 +283,6 @@ FAR.connLabel = function (conn) {
     return user + '@' + host;
 };
 
-/**
- * Определяет MIME-тип по имени/расширению файла.
- */
 FAR.guessMimeByName = function (name) {
     if (!name) return '';
     const ext = String(name).split('.').pop().toLowerCase();
@@ -380,9 +354,6 @@ FAR.guessMimeByName = function (name) {
 // Прямые ссылки на файлы
 // ============================================================
 
-/**
- * Строит прямой URL к файлу из share.
- */
 FAR.buildDirectFileUrl = function (item, side) {
     if (!item || !item.path) return null;
 
@@ -408,9 +379,6 @@ FAR.buildDirectFileUrl = function (item, side) {
     return url;
 };
 
-/**
- * Открывает файл в новом окне браузера.
- */
 FAR.openFileInNewWindow = async function (item, side) {
     if (!item || item.isFolder) {
         FAR.toast('Выберите файл (не папку)', 'warning');

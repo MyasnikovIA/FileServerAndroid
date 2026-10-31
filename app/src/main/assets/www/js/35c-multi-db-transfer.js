@@ -19,9 +19,6 @@ FAR.transferBetweenSides = async function (mode) {
     return FAR.transferBetweenContexts(sSrc, sDst, items, sDst.path, mode);
 };
 
-/**
- * Универсальный перенос/копирование между двумя контекстами БД.
- */
 FAR.transferBetweenContexts = async function (sSrc, sDst, items, targetPath, mode) {
     if (!sSrc || !sSrc.db) { FAR.toast('Источник не подключён', 'warning'); return; }
     if (!sDst || !sDst.db) { FAR.toast('Цель не подключена', 'warning'); return; }
@@ -52,8 +49,13 @@ FAR._transferCtxViaServerApi = async function (mode, items, sSrc, sDst, targetPa
     await FAR._nextPaint();
     let ok = 0, err = 0;
 
+    // Circuit breaker: 3 подряд "share not available" — стоп
+    let fatalCount = 0;
+    const MAX_FATAL = 3;
+    let aborted = false;
+
     for (let i = 0; i < items.length; i++) {
-        if (prog.state.cancelled) break;
+        if (prog.state.cancelled || aborted) break;
         const item = items[i];
         const srcPath = FAR.normPath(item.path);
         const itemName = item.name || srcPath.split('/').pop();
@@ -74,10 +76,23 @@ FAR._transferCtxViaServerApi = async function (mode, items, sSrc, sDst, targetPa
                 throw e;
             }
             ok++;
+            fatalCount = 0;
             prog.log('✅ ' + dstPath, 'ok');
         } catch (e) {
             err++;
             prog.log('❌ ' + srcPath + ': ' + e.message, 'err');
+
+            if (FAR._transferIsFatalError(e)) {
+                fatalCount++;
+                if (fatalCount >= MAX_FATAL) {
+                    prog.log('⛔ Прерываю: цель недоступна (' + e.message + '). ' +
+                        'Проверьте/перемонтируйте диск и повторите.', 'err');
+                    aborted = true;
+                    break;
+                }
+            } else {
+                fatalCount = 0;
+            }
         }
         prog.update(i + 1, items.length, srcPath, err);
     }
@@ -103,7 +118,6 @@ FAR._transferCtxViaClient = async function (mode, items, sSrc, sDst, targetPath)
             );
             folderTasks.push({ srcPath: srcFolderPath, dstPath: dstFolderPath });
 
-            // Рекурсивный обход
             const subPrefix = srcFolderPath ? srcFolderPath + '/' : '';
             const encBase = encodeURIComponent(subPrefix);
             const dStart = 'd:' + encBase;
@@ -167,9 +181,17 @@ FAR._transferCtxViaClient = async function (mode, items, sSrc, sDst, targetPath)
     await FAR._nextPaint();
     let ok = 0, err = 0, step = 0;
 
+    // ════════════════════════════════════════════════════════
+    // Circuit breaker: если share сломан — не молотим сотни
+    // файлов, а останавливаемся после 3 фатальных ошибок подряд.
+    // ════════════════════════════════════════════════════════
+    let fatalCount = 0;
+    const MAX_FATAL = 3;
+    let aborted = false;
+
     // 1. Папки
     for (const f of uniqueFolders) {
-        if (prog.state.cancelled) break;
+        if (prog.state.cancelled || aborted) break;
         step++;
         prog.update(step - 1, totalSteps, '📁 ' + f.dstPath, err);
 
@@ -183,16 +205,29 @@ FAR._transferCtxViaClient = async function (mode, items, sSrc, sDst, targetPath)
             if (rev) doc._rev = rev;
             await sDst.db.put(doc);
             ok++;
+            fatalCount = 0;
             prog.log('✅ ' + f.dstPath, 'ok');
         } catch (e) {
             err++;
             prog.log('❌ ' + f.dstPath + ': ' + e.message, 'err');
+
+            if (FAR._transferIsFatalError(e)) {
+                fatalCount++;
+                if (fatalCount >= MAX_FATAL) {
+                    prog.log('⛔ Прерываю: share-приёмник недоступен. ' +
+                        'Проверьте, вставлена ли SD-карта и совпадает ли путь в config.json.', 'err');
+                    aborted = true;
+                    break;
+                }
+            } else {
+                fatalCount = 0;
+            }
         }
         prog.update(step, totalSteps, '📁 ' + f.dstPath, err);
     }
 
     // 2. Файлы
-    for (let i = 0; i < fileTasks.length; i++) {
+    for (let i = 0; i < fileTasks.length && !aborted; i++) {
         if (prog.state.cancelled) break;
         const t = fileTasks[i];
         step++;
@@ -217,53 +252,103 @@ FAR._transferCtxViaClient = async function (mode, items, sSrc, sDst, targetPath)
                         chunks.push(cAtt);
                     } catch (e3) {}
                 }
-                const total = chunks.reduce(function (sum, c) { return sum + (c.size || 0); }, 0);
-                const data = new Uint8Array(total);
-                let off = 0;
-                for (const c of chunks) {
-                    const arr = new Uint8Array(await c.arrayBuffer());
-                    data.set(arr, off);
-                    off += arr.length;
-                }
-                att = new Blob([data], { type: ct });
+                if (chunks.length === 0) throw new Error('Не удалось прочитать чанки');
+
+                // chunks — массив Blob'ов. Склеиваем в один Blob.
+                att = new Blob(chunks, { type: t.srcItem.contentType || 'application/octet-stream' });
+                ct = t.srcItem.contentType || 'application/octet-stream';
             }
 
-            const blob = att instanceof Blob ? att : new Blob([att], { type: ct });
-            const newId = 'f:' + encodeURIComponent(t.dstPath);
-            await sDst.db.putAttachment(newId, 'b', null, blob, ct);
+            const dstDocId = 'f:' + encodeURIComponent(t.dstPath);
+            await sDst.db.putAttachment(dstDocId, 'b', null, att, ct);
 
-            if (mode === 'move') srcItemsToRemove.push(t.srcItem._id);
+            if (mode === 'move') {
+                srcItemsToRemove.push({
+                    _id: t.srcItem._id,
+                    path: t.srcPath
+                });
+            }
+
             ok++;
+            fatalCount = 0;
             prog.log('✅ ' + t.dstPath, 'ok');
         } catch (e) {
             err++;
             prog.log('❌ ' + t.dstPath + ': ' + e.message, 'err');
+
+            if (FAR._transferIsFatalError(e)) {
+                fatalCount++;
+                if (fatalCount >= MAX_FATAL) {
+                    prog.log('⛔ Прерываю: цель недоступна. Проверьте/перемонтируйте диск.', 'err');
+                    aborted = true;
+                    break;
+                }
+            } else {
+                fatalCount = 0;
+            }
         }
         prog.update(step, totalSteps, t.dstPath, err);
     }
 
-    // 3. Удаление из источника
-    if (mode === 'move' && !prog.state.cancelled && srcItemsToRemove.length > 0) {
-        prog.log('🗑️ Удаление из источника: ' + srcItemsToRemove.length + ' док.', 'info');
-        for (const srcId of srcItemsToRemove) {
+    // 3. Удаление исходников (только для move mode, если не было фатальных ошибок)
+    if (mode === 'move' && !aborted && !prog.state.cancelled && ok > 0) {
+        prog.log('✂️ Удаление исходных файлов...', 'info');
+        const removedIds = new Set();
+
+        for (const src of srcItemsToRemove) {
+            if (removedIds.has(src._id)) continue;
+            removedIds.add(src._id);
             try {
-                const doc = await sSrc.db.get(srcId);
-                await sSrc.db.remove(doc);
+                await sSrc.db.remove(src._id);
             } catch (e) {
-                err++;
-                prog.log('⚠️ не удалён ' + srcId + ': ' + e.message, 'warn');
+                console.warn('[move] remove file failed:', src.path, e);
             }
         }
-        const folderIdsToRemove = items
-            .filter(function (item) { return item.isFolder; })
-            .map(function (item) { return item._id; });
-        folderIdsToRemove.sort(function (a, b) { return b.length - a.length; });
-        for (const fid of folderIdsToRemove) {
-            try { const doc = await sSrc.db.get(fid); await sSrc.db.remove(doc); }
-            catch (e) {}
+
+        // Удаляем верхнеуровневые исходные папки (сервер удалит рекурсивно)
+        for (const item of items) {
+            if (!item.isFolder) continue;
+            const itemId = 'd:' + encodeURIComponent(FAR.normPath(item.path));
+            if (removedIds.has(itemId)) continue;
+            removedIds.add(itemId);
+            try {
+                await sSrc.db.remove(itemId);
+            } catch (e) {
+                console.warn('[move] remove folder failed:', item.path, e);
+            }
         }
     }
 
     prog.finish(err);
-    FAR.toast(actionLabel + ' ' + ok + ' из ' + totalSteps, ok ? 'success' : 'error');
+    FAR.toast(
+        actionLabel + ': ' + ok + ' из ' + (uniqueFolders.length + fileTasks.length),
+        ok > 0 ? 'success' : 'error'
+    );
+};
+
+// ============================================================
+// Хелпер: детектор "фатальных" ошибок переноса
+// ============================================================
+//
+// Такие ошибки означают, что проблема не в отдельном файле,
+// а в доступности share-приёмника. После 3 подряд — прерываемся.
+FAR._transferIsFatalError = function (e) {
+    if (!e) return false;
+    if (e.status === 404) return true;  // share/file not found
+    if (e.status === 507) return true;  // quota exceeded
+    if (e.status === 403) return true;  // access denied
+
+    const msg = String(e.message || '').toLowerCase();
+    return (
+        msg.includes('failed to fetch') ||
+        msg.includes('not available') ||
+        msg.includes('not found') ||
+        msg.includes('no such') ||
+        msg.includes('share ') ||
+        msg.includes('invalid argument') ||
+        msg.includes('einval') ||
+        msg.includes('quota exceeded') ||
+        msg.includes('access denied') ||
+        msg.includes('forbidden')
+    );
 };

@@ -1,25 +1,13 @@
 package ru.miacomsoft.fileserver;
 
-// ============================================================
-// VirtualResolver.java — резолв виртуального пути.
-//
-//   ""                          → корень (список)
-//   "Documents"                 → share "Documents", rel=""
-//   "Documents/sub/file.txt"    → share "Documents", rel="sub/file.txt"
-//
-// ROOT SHARE (name=""):
-//   если первый сегмент пути не совпал ни с одним явным share,
-//   весь путь уходит внутрь root share:
-//     "SubDir/file.txt"         → root share, rel="SubDir/file.txt"
-// ============================================================
-
+import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 
 public class VirtualResolver {
 
     public static class Resolved {
-        public Config.Share share;      // null для чистого корня
+        public Config.Share share;
         public String relPath = "";
         public Path   physicalPath;
         public boolean isRoot = false;
@@ -31,36 +19,30 @@ public class VirtualResolver {
 
         String norm = FileService.normalize(virtualPath);
 
-        // Чистый корень
         if (norm.isEmpty()) {
             Resolved r = new Resolved();
             r.isRoot = true;
             return r;
         }
 
-        // Разбор "shareName/rest"
         String shareName;
         String rest;
         int slash = norm.indexOf('/');
         if (slash < 0) { shareName = norm; rest = ""; }
         else           { shareName = norm.substring(0, slash); rest = norm.substring(slash + 1); }
 
-        // 1. Явный share по имени
         Config.Share share = auth.config().findShare(shareName);
 
-        // 2. Fallback на root share
         if (share == null) {
             Config.Share rootShare = auth.config().findRootShare();
             if (rootShare != null) {
                 share = rootShare;
-                // Для root share весь путь идёт внутрь
                 rest = norm;
             } else {
                 throw new java.util.NoSuchElementException("Unknown share: " + shareName);
             }
         }
 
-        // Проверка прав
         boolean ok;
         switch (action) {
             case "read":   ok = auth.canRead(session, share);   break;
@@ -69,20 +51,38 @@ public class VirtualResolver {
             default:       ok = false;
         }
         if (!ok) {
-            throw new SecurityException("Access denied to share: " + share.name +
-                    " (" + action + ")");
+            throw new SecurityException("Access denied to share: " + share.name
+                    + " (" + action + ")");
         }
 
-        // Файловый share не имеет детей
         if (share.isFile() && !rest.isEmpty()) {
             throw new NoSuchFileException("File share has no children: " + virtualPath);
         }
 
-        // Физический путь + защита от escapes
-        Path physical = share.physicalPath();
+        // === Проверка, что физический корень share ещё существует ===
+        // (SD-карта вынута, диск отключён, путь устарел после переформатирования)
+        Path shareRoot;
+        try {
+            shareRoot = share.physicalPath();
+        } catch (Exception e) {
+            throw new java.util.NoSuchElementException(
+                    "Share '" + share.name + "' has invalid physical path");
+        }
+        if (!Files.exists(shareRoot)) {
+            throw new java.util.NoSuchElementException(
+                    "Share '" + share.name + "' is not available: "
+                            + shareRoot + " (SD card removed or disk detached)");
+        }
+        if (!Files.isDirectory(shareRoot) && !Files.isRegularFile(shareRoot)) {
+            throw new java.util.NoSuchElementException(
+                    "Share '" + share.name + "' is not available: "
+                            + shareRoot + " is not a file/directory");
+        }
+
+        Path physical = shareRoot;
         if (!rest.isEmpty()) {
             physical = physical.resolve(rest).normalize();
-            if (!physical.startsWith(share.physicalPath())) {
+            if (!physical.startsWith(shareRoot)) {
                 throw new SecurityException("Path escapes share: " + virtualPath);
             }
         }

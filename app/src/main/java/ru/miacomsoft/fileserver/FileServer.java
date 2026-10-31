@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpExchange;
 import org.json.JSONException;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -112,6 +113,51 @@ public class FileServer {
         } catch (JSONException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * Отправляет ошибку и явно закрывает соединение.
+     * Критично для PUT/POST: если тело не было прочитано,
+     * клиент получит reset при попытке дописать остаток.
+     * Заголовок "Connection: close" заставляет клиента закрыть
+     * соединение после чтения ответа, не пытаясь продолжить.
+     */
+    static void sendErrorAndClose(HttpExchange ex, int status, String message) {
+        try {
+            org.json.JSONObject obj = new org.json.JSONObject();
+            obj.put("error", message == null ? "" : message);
+            obj.put("status", status);
+            byte[] body = obj.toString().getBytes(StandardCharsets.UTF_8);
+
+            handleCors(ex);
+            ex.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+            ex.getResponseHeaders().set("Connection", "close");
+
+            ex.sendResponseHeaders(status, body.length);
+            try (OutputStream os = ex.getResponseBody()) {
+                os.write(body);
+            }
+        } catch (Exception e) {
+            try { ex.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    /**
+     * Вычитывает тело запроса в "никуда", чтобы клиент не получил
+     * RST-пакет, если сервер уже собирается отправить ошибку.
+     * Ограничено maxBytes — если тело больше, бросаем чтение
+     * и полагаемся на "Connection: close" в ответе.
+     */
+    static void drainRequestBody(HttpExchange ex, long maxBytes) {
+        try (InputStream is = ex.getRequestBody()) {
+            byte[] buf = new byte[8192];
+            long total = 0;
+            int n;
+            while ((n = is.read(buf)) > 0) {
+                total += n;
+                if (total > maxBytes) break;
+            }
+        } catch (Exception ignored) {}
     }
 
     static Map<String, String> parseQuery(String query) {

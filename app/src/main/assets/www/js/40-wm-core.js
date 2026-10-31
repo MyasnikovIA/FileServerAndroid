@@ -54,11 +54,19 @@ FAR.WM.enter = function () {
         console.warn('[WM restore] failed:', e);
     });
 
-    FAR.toast('Оконный режим включён', 'info');
+    FAR.toast('Рабочий стол запущен', 'info');
 };
 
 FAR.WM.exit = function () {
     if (!FAR.WM.state.active) return;
+
+    // ОТМЕНА pending debounce: иначе отложенный таймер от какого-то
+    // предыдущего действия сработает уже после force-close всех окон
+    // и перезапишет корректное состояние пустым массивом.
+    if (FAR.WM._saveWindowStateTimer) {
+        clearTimeout(FAR.WM._saveWindowStateTimer);
+        FAR.WM._saveWindowStateTimer = null;
+    }
 
     FAR.WM._saveWindowState();
 
@@ -75,7 +83,7 @@ FAR.WM.exit = function () {
     FAR.WM.saveMode('panel');
 
     FAR.WM._stopClock();
-    FAR.toast('Возврат в классический режим', 'info');
+    FAR.toast('Рабочий стол скрыт', 'info');
 };
 
 FAR.WM.toggle = function () {
@@ -226,6 +234,12 @@ FAR.WM.openWindow = function (opts) {
     return win;
 };
 
+// ============================================================
+// Закрытие окна — сохранение состояния СРАЗУ, без debounce.
+// Иначе при быстром F5 после закрытия закрытие теряется, и при
+// следующем старте окно восстанавливается.
+// ============================================================
+
 FAR.WM.closeWindow = function (id, force) {
     const idx = FAR.WM.state.windows.findIndex(w => w.id === id);
     if (idx < 0) return;
@@ -263,14 +277,14 @@ FAR.WM.closeWindow = function (id, force) {
     FAR.WM._renderTaskbar();
 
     if (!force) {
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ:
-        // Если закрыли последнее окно, сохраняем состояние МГНОВЕННО (без задержки),
-        // чтобы при быстрой перезагрузке пустой массив успел записаться в localStorage.
-        if (FAR.WM.state.windows.length === 0) {
-            FAR.WM._saveWindowState();
-        } else {
-            FAR.WM._saveWindowStateDebounced();
+        // КРИТИЧНО: немедленное сохранение — не debounce.
+        // Отменяем возможный pending-таймер от предыдущих действий
+        // и сохраняем актуальный массив окон.
+        if (FAR.WM._saveWindowStateTimer) {
+            clearTimeout(FAR.WM._saveWindowStateTimer);
+            FAR.WM._saveWindowStateTimer = null;
         }
+        FAR.WM._saveWindowState();
     }
 };
 
@@ -303,11 +317,8 @@ FAR.WM._startDrag = function (e, id) {
     };
     win.el.classList.add('dragging');
 
-    const onMove = FAR.WM._onDragMove;
-    const onUp = FAR.WM._onDragUp;
-
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    document.addEventListener('mousemove', FAR.WM._onDragMove);
+    document.addEventListener('mouseup', FAR.WM._onDragUp);
 };
 
 FAR.WM._onDragMove = function (e) {
@@ -350,6 +361,7 @@ FAR.WM._onDragUp = function () {
     FAR.WM._hideSnapPreview();
 
     if (snap && win) FAR.WM.snapWindow(win.id, snap);
+    else if (win) FAR.WM._saveWindowStateDebounced();
 };
 
 FAR.WM._showSnapPreview = function (side) {
@@ -763,7 +775,18 @@ FAR.WM._serializeWindow = function (win) {
     };
 };
 
+// ============================================================
+// Сохранение состояния.
+// Отменяем pending debounce, чтобы не было двух записей подряд,
+// и логируем ошибки в консоль (раньше молча глотались).
+// ============================================================
+
 FAR.WM._saveWindowState = function () {
+    if (FAR.WM._saveWindowStateTimer) {
+        clearTimeout(FAR.WM._saveWindowStateTimer);
+        FAR.WM._saveWindowStateTimer = null;
+    }
+
     try {
         const snaps = [];
         FAR.WM.state.windows.forEach(function (w) {
@@ -771,7 +794,9 @@ FAR.WM._saveWindowState = function () {
             if (s) snaps.push(s);
         });
         localStorage.setItem(FAR.WM.LS_WINDOWS_KEY, JSON.stringify(snaps));
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+        console.error('[WM saveWindowState] failed:', e);
+    }
 };
 
 FAR.WM._saveWindowStateTimer = null;
@@ -799,11 +824,20 @@ FAR.WM.clearWindowState = function () {
     try { localStorage.removeItem(FAR.WM.LS_WINDOWS_KEY); } catch (e) {}
 };
 
+// ============================================================
+// Восстановление окон.
+// В начале гасим pending debounce, чтобы таймер не сработал
+// посреди асинхронного восстановления и не затёр состояние.
+// ============================================================
+
 FAR.WM._restoreWindows = async function () {
-    // Чистый старт: закрываем любые окна, которые могли быть
-    // созданы ДО WM.enter() — обычно это autostart, сработавший
-    // до авторизации. Их состояние уже сохранено в LS, поэтому
-    // ниже восстановим корректный набор из LS.
+    if (FAR.WM._saveWindowStateTimer) {
+        clearTimeout(FAR.WM._saveWindowStateTimer);
+        FAR.WM._saveWindowStateTimer = null;
+    }
+
+    // Чистим окна, появившиеся до WM.enter (autostart) — их реальное
+    // состояние уже в LS. force=true: не сохраняем это очищение.
     if (FAR.WM.state.windows.length > 0) {
         const preIds = FAR.WM.state.windows.map(function (w) { return w.id; });
         for (const id of preIds) {
@@ -813,13 +847,11 @@ FAR.WM._restoreWindows = async function () {
 
     const snaps = FAR.WM._loadWindowState();
 
-    // Первый запуск в жизни профиля — открываем дефолтный explorer.
     if (snaps === null) {
         FAR.WM.openApp('explorer');
         return;
     }
 
-    // Пользователь закрыл все окна в прошлой сессии — уважаем.
     if (snaps.length === 0) {
         return;
     }
@@ -1003,6 +1035,7 @@ FAR.WM.snapWindow = function (id, side) {
     FAR.WM._saveWindowStateDebounced();
 };
 
+// Второй _applyRect (с сохранением) — как в исходнике.
 FAR.WM._applyRect = function (win, r) {
     win.x = r.x; win.y = r.y; win.w = r.w; win.h = r.h;
     win.el.style.left   = r.x + 'px';
@@ -1017,7 +1050,19 @@ FAR.WM._applyRect = function (win, r) {
     FAR.WM._saveWindowStateDebounced();
 };
 
+// ============================================================
+// Страховка при выгрузке страницы.
+// beforeunload + pagehide — второй надёжнее в WebView и при
+// переходах через bfcache.
+// ============================================================
+
 window.addEventListener('beforeunload', function () {
+    if (FAR.WM.state.active) {
+        FAR.WM._saveWindowState();
+    }
+});
+
+window.addEventListener('pagehide', function () {
     if (FAR.WM.state.active) {
         FAR.WM._saveWindowState();
     }

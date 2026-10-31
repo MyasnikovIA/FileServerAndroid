@@ -8,13 +8,21 @@ import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 
 public class ApiHandler implements HttpHandler {
+
+    private static final long MAX_WRITE_SIZE = 2L * 1024L * 1024L * 1024L;
+    private static final long DRAIN_LIMIT = 10L * 1024L * 1024L;
 
     @Override
     public void handle(HttpExchange ex) throws Exception {
@@ -22,7 +30,9 @@ public class ApiHandler implements HttpHandler {
 
         String path = ex.getRequestURI().getPath();
         String method = ex.getRequestMethod().toUpperCase();
-        Map<String, String> q = FileServer.parseQuery(ex.getRequestURI().getQuery());
+        // ФИКС: getRawQuery() вместо getQuery() — иначе %26 в именах
+        // файлов декодируется в '&' и parseQuery режет путь.
+        Map<String, String> q = FileServer.parseQuery(ex.getRequestURI().getRawQuery());
 
         if (path.startsWith("/api/public/")) {
             handlePublic(ex, path);
@@ -40,7 +50,8 @@ public class ApiHandler implements HttpHandler {
         AuthService.Session session = FileServer.auth().authenticate(ex);
         if (session == null) {
             ex.getResponseHeaders().set("WWW-Authenticate", "Basic realm=\"FileServer\"");
-            FileServer.sendError(ex, 401, "Unauthorized");
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 401, "Unauthorized");
             return;
         }
 
@@ -60,14 +71,17 @@ public class ApiHandler implements HttpHandler {
                 case "/api/copy":            handleCopy(ex, method, q, session);         return;
                 default:
                     if (tryApiSharePath(ex, path)) return;
-                    FileServer.sendError(ex, 404, "Unknown endpoint: " + path);
+                    FileServer.sendErrorAndClose(ex, 404, "Unknown endpoint: " + path);
             }
         } catch (NoSuchFileException e) {
-            FileServer.sendError(ex, 404, "Not found: " + e.getFile());
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 404, "Not found: " + e.getFile());
         } catch (java.util.NoSuchElementException e) {
-            FileServer.sendError(ex, 404, e.getMessage());
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 404, e.getMessage());
         } catch (SecurityException e) {
-            FileServer.sendError(ex, 403, "Forbidden: " + e.getMessage());
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 403, "Forbidden: " + e.getMessage());
         } catch (QuotaService.QuotaExceededException e) {
             JSONObject o = new JSONObject();
             o.put("error", "Quota exceeded");
@@ -77,66 +91,72 @@ public class ApiHandler implements HttpHandler {
             o.put("freeBytes", e.freeBytes);
             o.put("deltaBytes", e.deltaBytes);
             o.put("status", 507);
-            FileServer.sendJson(ex, 507, o.toString());
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 507, o.toString());
         } catch (IllegalArgumentException e) {
-            FileServer.sendError(ex, 400, "Bad request: " + e.getMessage());
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 400, "Bad request: " + e.getMessage());
+        } catch (FileSystemException e) {
+            String reason = e.getReason();
+            String file = e.getFile();
+            String msg;
+            if (reason != null && reason.toLowerCase(Locale.ROOT).contains("invalid argument")) {
+                msg = "Invalid filename (contains characters not allowed on this filesystem)";
+                if (file != null) msg += ": " + file;
+            } else {
+                msg = "Filesystem error";
+                if (reason != null) msg += ": " + reason;
+                if (file != null) msg += " (file: " + file + ")";
+            }
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 400, msg);
+        } catch (IOException e) {
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 500, "I/O error: " + e.getMessage());
         } catch (Exception e) {
             e.printStackTrace();
-            FileServer.sendError(ex, 500, "Server error: " + e.getMessage());
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 500, "Server error: " + e.getMessage());
+        } catch (Throwable t) {
+            t.printStackTrace();
+            try {
+                FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+                FileServer.sendErrorAndClose(ex, 500, "Fatal error: "
+                        + t.getClass().getSimpleName()
+                        + (t.getMessage() != null ? ": " + t.getMessage() : ""));
+            } catch (Exception ignored) {}
         }
     }
 
     private void handleChangePassword(HttpExchange ex, String method, AuthService.Session s) throws Exception {
-        if (!"POST".equals(method)) {
-            FileServer.sendError(ex, 405, "Method not allowed");
-            return;
-        }
-        if (s.anonymous || s.user == null) {
-            FileServer.sendError(ex, 403, "Only authenticated users can change password");
-            return;
-        }
-
+        if (!"POST".equals(method)) { FileServer.sendError(ex, 405, "Method not allowed"); return; }
+        if (s.anonymous || s.user == null) { FileServer.sendError(ex, 403, "Only authenticated users can change password"); return; }
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         try (InputStream is = ex.getRequestBody()) {
-            byte[] tmp = new byte[4096];
-            int n;
+            byte[] tmp = new byte[4096]; int n;
             while ((n = is.read(tmp)) > 0) buf.write(tmp, 0, n);
         }
         String body = new String(buf.toByteArray(), StandardCharsets.UTF_8).trim();
-
-        String oldPass = "";
-        String newPass = "";
+        String oldPass, newPass;
         try {
             JSONObject jo = new JSONObject(body);
             oldPass = jo.optString("oldPassword", "");
             newPass = jo.optString("newPassword", "");
-        } catch (Exception e) {
-            FileServer.sendError(ex, 400, "Invalid JSON body");
-            return;
-        }
-
+        } catch (Exception e) { FileServer.sendError(ex, 400, "Invalid JSON body"); return; }
         if (!Objects.equals(s.user.password == null ? "" : s.user.password, oldPass)) {
-            FileServer.sendError(ex, 400, "Неверный текущий пароль");
-            return;
+            FileServer.sendError(ex, 400, "Неверный текущий пароль"); return;
         }
         if (newPass == null || newPass.isEmpty()) {
-            FileServer.sendError(ex, 400, "Пароль не может быть пустым");
-            return;
+            FileServer.sendError(ex, 400, "Пароль не может быть пустым"); return;
         }
-
         s.user.password = newPass;
         FileServer.config().save(FileServer.configPath());
-
-        JSONObject ok = new JSONObject();
-        ok.put("ok", true);
+        JSONObject ok = new JSONObject(); ok.put("ok", true);
         FileServer.sendJson(ex, 200, ok.toString());
     }
 
     private void handleAutostart(HttpExchange ex, String method) throws Exception {
-        if (!"GET".equals(method)) {
-            FileServer.sendError(ex, 405, "Method not allowed");
-            return;
-        }
+        if (!"GET".equals(method)) { FileServer.sendError(ex, 405, "Method not allowed"); return; }
         JSONObject resp = new JSONObject();
         resp.put("androidApps", FileServer.config().autostartAndroid);
         resp.put("jsScripts", FileServer.config().autostartJs);
@@ -535,56 +555,137 @@ public class ApiHandler implements HttpHandler {
                 ex, fsPath, StaticHandler.detectContentType(fsPath));
     }
 
+    // ============================================================
+    // WRITE — потоковая запись в temp-файл, без OOM.
+    // ============================================================
+
     private void handleWrite(HttpExchange ex, String method, Map<String, String> q,
-                             AuthService.Session s)
-            throws Exception {
+                             AuthService.Session s) throws Exception {
         if (!"PUT".equals(method) && !"POST".equals(method)) {
-            FileServer.sendError(ex, 405, "Method not allowed"); return;
+            FileServer.sendError(ex, 405, "Method not allowed");
+            return;
         }
         String vpath = q.getOrDefault("path", "");
         String norm = FileService.normalize(vpath);
-        if (norm.isEmpty()) { FileServer.sendError(ex, 400, "path is required"); return; }
+        if (norm.isEmpty()) {
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 400, "path is required");
+            return;
+        }
+
+        String segErr = FileService.validatePathSegments(norm);
+        if (segErr != null) {
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 400, "Invalid path: " + segErr);
+            return;
+        }
 
         VirtualResolver.Resolved r = VirtualResolver.resolve(
                 FileServer.auth(), s, norm, "write");
         if (r.share.isFile() && !r.relPath.isEmpty()) {
-            FileServer.sendError(ex, 400, "Cannot write into a file share");
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 400, "Cannot write into a file share");
             return;
         }
 
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        try (InputStream is = ex.getRequestBody()) {
-            byte[] tmp = new byte[16384];
-            int n;
-            while ((n = is.read(tmp)) > 0) buf.write(tmp, 0, n);
+        long contentLength = -1;
+        String clHeader = ex.getRequestHeaders().getFirst("Content-Length");
+        if (clHeader != null) {
+            try { contentLength = Long.parseLong(clHeader); } catch (NumberFormatException ignored) {}
         }
-        byte[] data = buf.toByteArray();
+
+        if (contentLength > MAX_WRITE_SIZE) {
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 413, "File too large (max "
+                    + (MAX_WRITE_SIZE / 1024 / 1024) + " MB)");
+            return;
+        }
 
         long existingSize = 0;
-        if (Files.isRegularFile(r.physicalPath)) existingSize = Files.size(r.physicalPath);
-        long delta = data.length - existingSize;
-        FileServer.quota().checkWriteQuota(r.share, s, delta);
+        if (Files.isRegularFile(r.physicalPath)) {
+            try { existingSize = Files.size(r.physicalPath); } catch (IOException ignored) {}
+        }
+
+        if (contentLength > 0) {
+            long delta = contentLength - existingSize;
+            if (delta > 0) FileServer.quota().checkWriteQuota(r.share, s, delta);
+        }
 
         Path parent = r.physicalPath.getParent();
-        if (parent != null && !Files.exists(parent)) Files.createDirectories(parent);
+        if (parent != null && !Files.exists(parent)) {
+            Files.createDirectories(parent);
+        }
+        Path baseDir = (parent != null) ? parent : r.physicalPath.getParent();
+        if (baseDir == null) {
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 400, "Cannot determine parent directory");
+            return;
+        }
+        Path tempFile = Files.createTempFile(baseDir, ".far-write-", ".tmp");
 
-        Path tempFile = Files.createTempFile(
-                parent != null ? parent : r.physicalPath.getParent(),
-                ".far-write-", ".tmp");
+        long totalRead = 0;
+        boolean moved = false;
         try {
-            Files.write(tempFile, data,
-                    java.nio.file.StandardOpenOption.WRITE,
-                    java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
+            try (InputStream is = ex.getRequestBody();
+                 OutputStream os = Files.newOutputStream(tempFile,
+                         StandardOpenOption.WRITE,
+                         StandardOpenOption.TRUNCATE_EXISTING)) {
+
+                byte[] buffer = new byte[65536];
+                int n;
+                long nextQuotaCheck = 10L * 1024L * 1024L;
+                while ((n = is.read(buffer)) > 0) {
+                    totalRead += n;
+                    if (totalRead > MAX_WRITE_SIZE) {
+                        throw new IOException("File too large (max "
+                                + (MAX_WRITE_SIZE / 1024 / 1024) + " MB)");
+                    }
+                    os.write(buffer, 0, n);
+
+                    if (contentLength < 0 && totalRead >= nextQuotaCheck) {
+                        nextQuotaCheck += 10L * 1024L * 1024L;
+                        long delta = totalRead - existingSize;
+                        if (delta > 0) {
+                            FileServer.quota().checkWriteQuota(r.share, s, delta);
+                        }
+                    }
+                }
+            }
+
+            long finalDelta = totalRead - existingSize;
+            if (finalDelta > 0) {
+                FileServer.quota().checkWriteQuota(r.share, s, finalDelta);
+            }
+
+            // ============================================================
+            // ФИКС: ATOMIC_MOVE на NTFS через FUSE (Android) может бросить
+            // голый IOException ("Operation not permitted") — он НЕ является
+            // AtomicMoveNotSupportedException. Раньше это пролетало наверх
+            // как 500 I/O error, и файл не сохранялся.
+            //
+            // Теперь ловим ЛЮБОЙ IOException при попытке атомарного move
+            // и делаем fallback на обычный move с REPLACE_EXISTING.
+            // ============================================================
             try {
                 Files.move(tempFile, r.physicalPath,
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-                        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-            } catch (java.nio.file.AtomicMoveNotSupportedException amnse) {
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException amnse) {
+                // ФС явно не поддерживает ATOMIC_MOVE — сразу fallback.
                 Files.move(tempFile, r.physicalPath,
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException ioe) {
+                // ATOMIC_MOVE может бросить голый IOException
+                // (Operation not permitted на NTFS/FUSE).
+                // Fallback на обычный move.
+                Files.move(tempFile, r.physicalPath,
+                        StandardCopyOption.REPLACE_EXISTING);
             }
+            moved = true;
         } finally {
-            try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
+            if (!moved) {
+                try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
+            }
         }
 
         FileServer.quota().invalidate(r.share);
@@ -592,20 +693,40 @@ public class ApiHandler implements HttpHandler {
         JSONObject ok = new JSONObject();
         ok.put("ok", true);
         ok.put("path", norm);
-        ok.put("size", data.length);
+        ok.put("size", totalRead);
         FileServer.sendJson(ex, 200, ok.toString());
     }
 
+    // ============================================================
+    // MKDIR — валидация сегментов до создания папки.
+    // ============================================================
+
     private void handleMkdir(HttpExchange ex, String method, Map<String, String> q,
                              AuthService.Session s) throws Exception {
-        if (!"POST".equals(method)) { FileServer.sendError(ex, 405, "Method not allowed"); return; }
+        if (!"POST".equals(method)) {
+            FileServer.sendError(ex, 405, "Method not allowed");
+            return;
+        }
         String vpath = q.getOrDefault("path", "");
         String norm = FileService.normalize(vpath);
-        if (norm.isEmpty()) { FileServer.sendError(ex, 400, "path is required"); return; }
+        if (norm.isEmpty()) {
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 400, "path is required");
+            return;
+        }
+
+        String segErr = FileService.validatePathSegments(norm);
+        if (segErr != null) {
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 400, "Invalid path: " + segErr);
+            return;
+        }
+
         VirtualResolver.Resolved r = VirtualResolver.resolve(
                 FileServer.auth(), s, norm, "write");
         if (!r.share.isFolder()) {
-            FileServer.sendError(ex, 400, "Cannot create inside file share");
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 400, "Cannot create inside file share");
             return;
         }
         Files.createDirectories(r.physicalPath);
@@ -619,15 +740,21 @@ public class ApiHandler implements HttpHandler {
     private void handleDelete(HttpExchange ex, String method, Map<String, String> q,
                               AuthService.Session s) throws Exception {
         if (!"DELETE".equals(method) && !"POST".equals(method)) {
-            FileServer.sendError(ex, 405, "Method not allowed"); return;
+            FileServer.sendError(ex, 405, "Method not allowed");
+            return;
         }
         String vpath = q.getOrDefault("path", "");
         String norm = FileService.normalize(vpath);
-        if (norm.isEmpty()) { FileServer.sendError(ex, 400, "path is required"); return; }
+        if (norm.isEmpty()) {
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 400, "path is required");
+            return;
+        }
         VirtualResolver.Resolved r = VirtualResolver.resolve(
                 FileServer.auth(), s, norm, "delete");
         if (r.relPath.isEmpty() && !r.share.isRoot()) {
-            FileServer.sendError(ex, 400, "Cannot delete share root");
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 400, "Cannot delete share root");
             return;
         }
         if (Files.exists(r.physicalPath)) {
@@ -642,11 +769,16 @@ public class ApiHandler implements HttpHandler {
 
     private void handleMove(HttpExchange ex, String method, Map<String, String> q,
                             AuthService.Session s) throws Exception {
-        if (!"POST".equals(method)) { FileServer.sendError(ex, 405, "Method not allowed"); return; }
+        if (!"POST".equals(method)) {
+            FileServer.sendError(ex, 405, "Method not allowed");
+            return;
+        }
         String fromV = FileService.normalize(q.getOrDefault("from", ""));
         String toV = FileService.normalize(q.getOrDefault("to", ""));
         if (fromV.isEmpty() || toV.isEmpty()) {
-            FileServer.sendError(ex, 400, "from and to are required"); return;
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 400, "from and to are required");
+            return;
         }
 
         VirtualResolver.Resolved rf = VirtualResolver.resolve(
@@ -655,7 +787,7 @@ public class ApiHandler implements HttpHandler {
                 FileServer.auth(), s, toV, "write");
 
         if (!Files.exists(rf.physicalPath)) {
-            FileServer.sendError(ex, 404, "Source not found: " + fromV);
+            FileServer.sendErrorAndClose(ex, 404, "Source not found: " + fromV);
             return;
         }
 
@@ -680,11 +812,16 @@ public class ApiHandler implements HttpHandler {
 
     private void handleCopy(HttpExchange ex, String method, Map<String, String> q,
                             AuthService.Session s) throws Exception {
-        if (!"POST".equals(method)) { FileServer.sendError(ex, 405, "Method not allowed"); return; }
+        if (!"POST".equals(method)) {
+            FileServer.sendError(ex, 405, "Method not allowed");
+            return;
+        }
         String fromV = FileService.normalize(q.getOrDefault("from", ""));
         String toV = FileService.normalize(q.getOrDefault("to", ""));
         if (fromV.isEmpty() || toV.isEmpty()) {
-            FileServer.sendError(ex, 400, "from and to are required"); return;
+            FileServer.drainRequestBody(ex, DRAIN_LIMIT);
+            FileServer.sendErrorAndClose(ex, 400, "from and to are required");
+            return;
         }
 
         VirtualResolver.Resolved rf = VirtualResolver.resolve(
@@ -693,7 +830,7 @@ public class ApiHandler implements HttpHandler {
                 FileServer.auth(), s, toV, "write");
 
         if (!Files.exists(rf.physicalPath)) {
-            FileServer.sendError(ex, 404, "Source not found: " + fromV);
+            FileServer.sendErrorAndClose(ex, 404, "Source not found: " + fromV);
             return;
         }
 
@@ -729,14 +866,14 @@ public class ApiHandler implements HttpHandler {
                         copyDirRecursive(child, target);
                     } else {
                         Files.copy(child, target,
-                                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                                StandardCopyOption.REPLACE_EXISTING);
                     }
                 }
             }
         } else {
             Path parent = dst.getParent();
             if (parent != null && !Files.exists(parent)) Files.createDirectories(parent);
-            Files.copy(src, dst, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(src, dst, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 
@@ -749,7 +886,7 @@ public class ApiHandler implements HttpHandler {
                     copyDirRecursive(child, target);
                 } else {
                     Files.copy(child, target,
-                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                            StandardCopyOption.REPLACE_EXISTING);
                 }
             }
         }

@@ -174,7 +174,7 @@
     function unregisterAndroidApps() {
         if (!FAR.WM || !FAR.WM._apps) return;
         Object.keys(FAR.WM._apps).forEach(function (id) {
-            if (id === 'android:refresh') return; // оставляем
+            if (id === 'android:refresh') return;
             if (id.indexOf('android:') === 0) {
                 delete FAR.WM._apps[id];
                 if (FAR.WM.APP_CATEGORY_MAP) delete FAR.WM.APP_CATEGORY_MAP[id];
@@ -182,6 +182,12 @@
         });
     }
 
+    /**
+     * Регистрирует каждое Android-приложение как WM-приложение.
+     * ИСПРАВЛЕНИЕ: обработчик onContextMenu перенесён ВНУТРЬ forEach,
+     * где appId определён. Раньше был дублирующий блок registerApp()
+     * вне цикла, который падал с "appId is not defined".
+     */
     function registerApps() {
         if (!window.FAR || !FAR.WM || typeof FAR.WM.registerApp !== 'function') {
             setTimeout(registerApps, 100); return;
@@ -202,7 +208,23 @@
                 firstLetterColor: colorFor(app.pkg),
                 androidPkg: app.pkg,
                 androidActivity: app.activity || '',
-                directLaunch: function () { launchApp(app.pkg, app.activity); }
+                directLaunch: function () { launchApp(app.pkg, app.activity); },
+
+                // ← Единственный обработчик ПКМ, теперь внутри forEach
+                onContextMenu: function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const menu = document.getElementById('wmContextMenu');
+                    if (!menu) return;
+                    menu.innerHTML = '';
+
+                    FAR.WM._addCtxItem(menu, '🚀 Добавить в автозапуск', function() {
+                        FAR.Autostart.addAndroidApp(app.pkg, app.activity || '', app.label);
+                    });
+
+                    FAR.WM._positionContextMenu(menu, e.clientX, e.clientY);
+                }
             });
             if (FAR.WM.APP_CATEGORY_MAP) FAR.WM.APP_CATEGORY_MAP[appId] = 'android';
         });
@@ -216,36 +238,6 @@
             directLaunch: function () {
                 const n = FAR.AndroidPrograms.reloadApps();
                 FAR.toast('Обновлено приложений: ' + n, 'success');
-            }
-        });
-
-        // Внутри registerApps() при создании directLaunch:
-        FAR.WM.registerApp({
-            id: appId,
-            title: app.label || app.pkg,
-            icon: '📱',
-            keywords: (app.pkg || '') + ' ' + (app.label || ''),
-            iconImg: app.icon || null,
-            firstLetter: firstLetterOf(app.label, app.pkg),
-            firstLetterColor: colorFor(app.pkg),
-            androidPkg: app.pkg,
-            androidActivity: app.activity || '',
-            directLaunch: function () { launchApp(app.pkg, app.activity); },
-
-            // --- НОВОЕ ---
-            onContextMenu: function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-
-                const menu = document.getElementById('wmContextMenu');
-                if (!menu) return;
-                menu.innerHTML = '';
-
-                FAR.WM._addCtxItem(menu, '🚀 Добавить в автозапуск', function() {
-                    FAR.Autostart.addAndroidApp(app.pkg, app.activity || '', app.label);
-                });
-
-                FAR.WM._positionContextMenu(menu, e.clientX, e.clientY);
             }
         });
         if (FAR.WM.APP_CATEGORY_MAP) FAR.WM.APP_CATEGORY_MAP['android:refresh'] = 'android';
@@ -314,7 +306,6 @@
             if (FAR.AndroidPrograms.apps.length > 0) {
                 registerApps();
             }
-            // Обновляем открытое меню, если оно показано
             if (FAR.WM && typeof FAR.WM._renderStartMenu === 'function') {
                 const sm = document.getElementById('wmStartMenu');
                 if (sm && sm.classList.contains('open')) {

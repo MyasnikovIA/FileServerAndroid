@@ -25,6 +25,60 @@ public class FileService {
         return String.join("/", list);
     }
 
+    /**
+     * Проверка одного сегмента имени файла/папки на совместимость
+     * с FAT32/exFAT (SD-карты на Android).
+     *
+     * @return null, если имя допустимо; иначе — текст ошибки
+     */
+    public static String validateName(String name) {
+        if (name == null || name.isEmpty()) return "empty name";
+        if (name.length() > 255) return "name too long (max 255 chars)";
+        if (".".equals(name) || "..".equals(name)) return "reserved name";
+
+        char last = name.charAt(name.length() - 1);
+        if (last == ' ' || last == '.') {
+            return "name ends with space or dot (invalid on FAT32/exFAT)";
+        }
+
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (c < 0x20 || c == 0x7F) {
+                return "control character (0x" + Integer.toHexString(c) + ")";
+            }
+            if (c == '\\' || c == '/' || c == ':' || c == '*' || c == '?'
+                    || c == '"' || c == '<' || c == '>' || c == '|') {
+                return "invalid character: '" + c + "'";
+            }
+        }
+
+        // Зарезервированные DOS-имена
+        int dot = name.indexOf('.');
+        String base = (dot > 0 ? name.substring(0, dot) : name).toUpperCase(Locale.ROOT);
+        if (base.equals("CON") || base.equals("PRN") || base.equals("AUX")
+                || base.equals("NUL") || base.equals("CLOCK$")) {
+            return "reserved DOS name: " + base;
+        }
+        if (base.matches("COM[1-9]") || base.matches("LPT[1-9]")) {
+            return "reserved DOS name: " + base;
+        }
+        return null;
+    }
+
+    /**
+     * Проверка всех сегментов пути (без учёта разделителя).
+     * @return null, если все сегменты валидны; иначе текст ошибки
+     */
+    public static String validatePathSegments(String normPath) {
+        if (normPath == null || normPath.isEmpty()) return null;
+        for (String seg : normPath.split("/")) {
+            if (seg.isEmpty()) continue;
+            String err = validateName(seg);
+            if (err != null) return "component '" + seg + "': " + err;
+        }
+        return null;
+    }
+
     public static Path resolve(Path root, String relPath) {
         String norm = normalize(relPath);
         Path resolved = (norm.isEmpty() ? root : root.resolve(norm)).normalize();
@@ -50,7 +104,6 @@ public class FileService {
                 }
             }
         } catch (AccessDeniedException e) {
-            // Если папка защищена системой (например, корень USB), просто возвращаем пустой список
             System.err.println("[FileService] Access denied: " + dir);
         }
         return result;
@@ -109,6 +162,9 @@ public class FileService {
     }
 
     public static void write(Path root, String relPath, byte[] data) throws IOException {
+        String err = validatePathSegments(normalize(relPath));
+        if (err != null) throw new IOException("Invalid path: " + err);
+
         Path p = resolve(root, relPath);
         Path parent = p.getParent();
         if (parent != null && !Files.exists(parent)) Files.createDirectories(parent);
@@ -118,6 +174,9 @@ public class FileService {
     }
 
     public static void mkdir(Path root, String relPath) throws IOException {
+        String err = validatePathSegments(normalize(relPath));
+        if (err != null) throw new IOException("Invalid path: " + err);
+
         Path p = resolve(root, relPath);
         Files.createDirectories(p);
     }
