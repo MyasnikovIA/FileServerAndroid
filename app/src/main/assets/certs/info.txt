@@ -1,0 +1,120 @@
+Создание keystore.p12 (openssl)
+
+# 1. Приватный ключ + самоподписанный сертификат
+openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+    -keyout key.pem -out cert.pem \
+    -subj "/CN=fileserver.local/O=FileServer/C=RU"
+
+# 2. Упаковка в PKCS12
+openssl pkcs12 -export \
+    -in cert.pem -inkey key.pem \
+    -out keystore.p12 -name server \
+    -passout pass:changeit
+
+# 3. Копирование в каталог приложения (например, через adb)
+adb push keystore.p12 /sdcard/Android/data/ru.miacomsoft.fileserver/files/certs/keystore.p12
+
+
+
+
+Вводим команду:
+```
+sudo certbot certonly --manual --preferred-challenges dns \
+  -d www.smwrap.ru
+```
+
+Видим сообщение:
+
+```
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Please deploy a DNS TXT record under the name:
+
+_acme-challenge.www.smwrap.ru.
+
+with the following value:
+
+R1dkwPllTA4RD1oX8DNsNoicwX2vxlie2hrQV4vGlZ4
+
+Before continuing, verify the TXT record has been deployed. Depending on the DNS
+provider, this may take some time, from a few seconds to multiple minutes. You can
+check if it has finished deploying with aid of online tools, such as the Google
+Admin Toolbox: https://toolbox.googleapps.com/apps/dig/#TXT/_acme-challenge.www.smwrap.ru.
+Look for one or more bolded line(s) below the line ';ANSWER'. It should show the
+value(s) you've just added.
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+```
+
+Перед тем как нажать ENTER заходим на страницу  https://www.reg.ru/user/account/card/33726141/nss/ добавляем TXT  "Добавить запись"
+
+![[Pasted image 20261021104559.png]]
+
+
+```
+_acme-challenge
+
+R1dkwPllTA4RD1oX8DNsNoicwX2vxlie2hrQV4vGlZ4
+```
+![[Pasted image 20261021104715.png]]
+После сохранения
+через пару минуть проверяем
+
+После  сохранения проверяем результат на сайте (может понадобиться пару минут для обновления)
+
+https://toolbox.googleapps.com/apps/dig/#TXT/_acme-challenge.smwrap.ru
+
+Когда значения появиться, тогда в консоли нажимаем ENTER
+
+и создаем новый  параметр на Reg.ru
+```
+_acme-challenge.www
+
+-tx4O7FPVYTHFCtoCqQ79uhmj9fVv9AdJl9zIsgvRk0
+
+```
+
+![[Pasted image 20261021105819.png]]
+
+
+
+-----
+
+```
+sudo certbot certonly --manual --preferred-challenges dns \
+  -d www.smwrap.ru
+```
+
+```
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Please deploy a DNS TXT record under the name:
+
+_acme-challenge.www.smwrap.ru.
+
+with the following value:
+
+fLFXf3oPIcM4yJKhbM3_6IY3JhEtqBWGrFfYV1cfAPs
+
+Before continuing, verify the TXT record has been deployed. Depending on the DNS
+provider, this may take some time, from a few seconds to multiple minutes. You can
+check if it has finished deploying with aid of online tools, such as the Google
+Admin Toolbox: https://toolbox.googleapps.com/apps/dig/#TXT/_acme-challenge.www.smwrap.ru.
+Look for one or more bolded line(s) below the line ';ANSWER'. It should show the
+value(s) you've just added.
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+```
+_acme-challenge → значение №1
+_acme-challenge.www → значение №2
+
+https://toolbox.googleapps.com/apps/dig/#TXT/_acme-challenge.smwrap.ru
+https://toolbox.googleapps.com/apps/dig/#TXT/_acme-challenge.www.smwrap.ru
+
+```
+README  smwrap.ru
+root@myasnikovia-M2-Air:/home/myasnikovia/JavaProject/Sertifikat_del/live# cd smwrap.ru/
+root@myasnikovia-M2-Air:/home/myasnikovia/JavaProject/Sertifikat_del/live/smwrap.ru# ls
+cert.pem  chain.pem  fullchain.pem  privkey.pem  README
+root@myasnikovia-M2-Air:/home/myasnikovia/JavaProject/Sertifikat_del/live/smwrap.ru#
+```

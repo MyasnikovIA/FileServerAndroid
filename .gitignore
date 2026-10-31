@@ -35,3 +35,4 @@ ehthumbs.db
 Thumbs.db
 
 gradle/wrapper/gradle-wrapper.jar
+app/src/main/assets/certs/keystore.p12

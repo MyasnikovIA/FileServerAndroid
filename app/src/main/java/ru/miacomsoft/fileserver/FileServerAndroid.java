@@ -12,6 +12,7 @@ import android.util.Log;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -28,11 +29,16 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.stream.Stream;
+import com.sun.net.httpserver.HttpsConfigurator;
+import com.sun.net.httpserver.HttpsServer;
 
+import java.nio.file.Paths;
+
+import javax.net.ssl.SSLContext;
 public class FileServerAndroid {
 
     private static final String TAG = "FileServerAndroid";
-
+    private String actualProtocol = "http";
     private final Context context;
     private HttpServer server;
     private Path configTemp;
@@ -58,10 +64,12 @@ public class FileServerAndroid {
 
         config = Config.load(configTemp);
 
+        // host/port — для Android всегда 0.0.0.0:8080
         config.host = "0.0.0.0";
         config.port = 8080;
 
-        config.httpsEnabled      = false;
+        // Эти функции на Android не поддерживаются — отключаем.
+        // ВАЖНО: httpsEnabled НЕ трогаем — уважаем настройку из config.json.
         config.videoChatEnabled  = false;
         config.hermesEnabled     = false;
         config.ollamaEnabled     = false;
@@ -77,8 +85,60 @@ public class FileServerAndroid {
 
         FileServer.bind(this, configTemp);
 
-        HttpServer srv = HttpServer.create(
-                new InetSocketAddress(config.host, config.port), 0);
+        // ============================================================
+        // HTTPS / HTTP
+        // ============================================================
+        SSLContext sslContext = null;
+        boolean httpsMode = false;
+
+        if (config.httpsEnabled) {
+            Path keystorePath = resolveHttpsKeystore();
+
+            if (keystorePath == null) {
+                Log.w(TAG, "HTTPS enabled but httpsKeystore is empty in config — using HTTP");
+            } else if (Files.isRegularFile(keystorePath)) {
+                try {
+                    sslContext = SslHelper.createFromPkcs12(keystorePath, config.httpsPassword);
+                    httpsMode  = true;
+                    Log.i(TAG, "HTTPS enabled, keystore: " + keystorePath);
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to load keystore " + keystorePath
+                            + " — falling back to HTTP: " + e.getMessage(), e);
+                }
+            } else {
+                // Файл ещё не положен. Создаём каталог, чтобы пользователь
+                // мог просто положить туда keystore.p12 и перезапустить.
+                Path parent = keystorePath.getParent();
+                if (parent != null && !Files.exists(parent)) {
+                    try {
+                        Files.createDirectories(parent);
+                        Log.i(TAG, "Created keystore directory: " + parent);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Cannot create directory " + parent, e);
+                    }
+                }
+                Log.w(TAG, "HTTPS enabled but keystore not found: " + keystorePath
+                        + " — using HTTP. Place keystore.p12 at that path and restart.");
+            }
+        }
+
+        actualProtocol = httpsMode ? "https" : "http";
+
+        // ============================================================
+        // Создание сервера
+        // ============================================================
+        HttpServer srv;
+        InetSocketAddress addr = new InetSocketAddress(config.host, config.port);
+
+        if (httpsMode) {
+            HttpsServer httpsSrv = HttpsServer.create(addr, 0);
+            httpsSrv.setHttpsConfigurator(new HttpsConfigurator(sslContext));
+            srv = httpsSrv;
+            Log.i(TAG, "Starting HTTPS server on " + addr);
+        } else {
+            srv = HttpServer.create(addr, 0);
+            Log.i(TAG, "Starting HTTP server on " + addr);
+        }
 
         srv.createContext("/api/events", new SseHandler());
         srv.createContext("/api/proxy",  ex -> ProxyHandler.handle(ex));
@@ -100,7 +160,8 @@ public class FileServerAndroid {
             }
         }, "DiskScanner").start();
 
-        Log.i(TAG, "Started on " + config.host + ":" + config.port + ", web=" + webRoot);
+        Log.i(TAG, "Started on " + actualProtocol + "://"
+                + config.host + ":" + config.port + ", web=" + webRoot);
     }
 
     public void stop() {
@@ -115,15 +176,91 @@ public class FileServerAndroid {
         }
         FileServer.unbind();
 
-        try { if (configTemp != null) Files.deleteIfExists(configTemp); }
-        catch (Exception ignored) {}
+        // ВАЖНО: configTemp НЕ удаляем — он должен сохраняться между
+        // перезапусками (HTTPS-настройки, добавленные shares и т.п.).
         configTemp = null;
+
+        actualProtocol = "http";
     }
 
     public String getListenUrl() {
         int port = (config != null) ? config.port : 8080;
-        return "http://" + getLocalIpAddress() + ":" + port;
+        return actualProtocol + "://" + getLocalIpAddress() + ":" + port;
     }
+
+    /**
+     * URL для локального WebView (всегда 127.0.0.1).
+     * Протокол соответствует фактическому режиму сервера (http/https).
+     */
+    public String getLocalUrl() {
+        int port = (config != null) ? config.port : 8080;
+        return actualProtocol + "://127.0.0.1:" + port;
+    }
+
+    /**
+     * Резолвит путь к keystore из config.httpsKeystore.
+     *
+     * Поддерживаемые варианты:
+     *   "assets:certs/keystore.p12"       → копируется из assets во внешний filesDir
+     *   "/sdcard/certs/keystore.p12"      → абсолютный путь как есть
+     *   "certs/keystore.p12"              → относительно getExternalFilesDir(null)
+     *
+     * Возвращает null, если путь пустой или невалидный.
+     * Возвращает Path (может указывать на ещё не существующий файл).
+     */
+    private Path resolveHttpsKeystore() {
+        if (config == null || config.httpsKeystore == null) return null;
+        String raw = config.httpsKeystore.trim();
+        if (raw.isEmpty()) return null;
+
+        // 1) assets: — извлекаем из APK во внешний filesDir
+        if (raw.startsWith("assets:")) {
+            String assetPath = raw.substring("assets:".length()).trim();
+            if (assetPath.isEmpty()) {
+                Log.w(TAG, "Empty asset path in httpsKeystore");
+                return null;
+            }
+            try {
+                File base = context.getExternalFilesDir(null);
+                if (base == null) base = context.getFilesDir();
+                File target = new File(base, "certs/keystore.p12");
+
+                if (!target.exists()) {
+                    File parent = target.getParentFile();
+                    if (parent != null && !parent.exists()) parent.mkdirs();
+
+                    try (InputStream is = context.getAssets().open(assetPath);
+                         OutputStream os = new FileOutputStream(target)) {
+                        byte[] buf = new byte[8192];
+                        int n;
+                        while ((n = is.read(buf)) > 0) os.write(buf, 0, n);
+                    }
+                    Log.i(TAG, "Extracted asset " + assetPath + " → " + target);
+                }
+                return target.toPath();
+            } catch (Exception e) {
+                Log.e(TAG, "Cannot extract asset " + assetPath, e);
+                return null;
+            }
+        }
+
+        // 2) Абсолютный путь — как есть
+        try {
+            Path p = Paths.get(raw);
+            if (p.isAbsolute()) return p.normalize();
+        } catch (Exception e) {
+            Log.e(TAG, "Invalid absolute path: " + raw, e);
+            return null;
+        }
+
+        // 3) Относительный путь — от getExternalFilesDir(null),
+        //    чтобы пользователь мог положить файл через файловый менеджер.
+        File base = context.getExternalFilesDir(null);
+        if (base == null) base = context.getFilesDir(); // fallback
+        return new File(base, raw).toPath().normalize();
+    }
+
+
 
     private String getLocalIpAddress() {
         try {

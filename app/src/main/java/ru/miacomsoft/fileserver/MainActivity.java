@@ -49,7 +49,7 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final String LOCAL_URL = "http://127.0.0.1:8080/";
+    private String currentLocalUrl = "http://127.0.0.1:8080/";
     private static final int REQ_FILE_CHOOSER = 1001;
 
     private static final String LAUNCH_MARKER = "__LAUNCH_APP__|";
@@ -112,8 +112,13 @@ public class MainActivity extends AppCompatActivity {
 
         FileServerService.setStateListener((running, url) -> runOnUiThread(() -> {
             if (running && !urlLoaded) {
+                String localUrl = FileServerService.getLocalUrl();
+                if (localUrl != null && !localUrl.isEmpty()) {
+                    currentLocalUrl = localUrl.endsWith("/") ? localUrl : localUrl + "/";
+                }
                 urlLoaded = true;
-                webView.loadUrl(LOCAL_URL);
+                Log.i("MainActivity", "Loading: " + currentLocalUrl);
+                webView.loadUrl(currentLocalUrl);
             }
         }));
 
@@ -257,10 +262,16 @@ public class MainActivity extends AppCompatActivity {
         if (!hasFilesPermission()) { showPermissionScreen(); return; }
         permissionBtn.setVisibility(View.GONE);
         if (urlLoaded) return;
+
         if (FileServerService.isRunning()) {
             showLoading("Подключение…");
+
+            String localUrl = FileServerService.getLocalUrl();
+            if (localUrl != null && !localUrl.isEmpty()) {
+                currentLocalUrl = localUrl.endsWith("/") ? localUrl : localUrl + "/";
+            }
             urlLoaded = true;
-            webView.loadUrl(LOCAL_URL);
+            webView.loadUrl(currentLocalUrl);
         } else {
             showLoading("Запуск сервера…");
             startServerService();
@@ -410,7 +421,10 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 hideLoading();
-                if (LOCAL_URL.equals(url)) reloadAttempt = 0;
+                if (url != null
+                        && (url.contains("127.0.0.1") || url.contains("localhost"))) {
+                    reloadAttempt = 0;
+                }
             }
 
             @Override
@@ -447,6 +461,13 @@ public class MainActivity extends AppCompatActivity {
             public void onReceivedError(WebView view, WebResourceRequest request,
                                         WebResourceError error) {
                 if (!request.isForMainFrame()) return;
+
+                // SSL-ошибки уже отработаны в onReceivedSslError — не ретраим.
+                if (error.getErrorCode() == WebViewClient.ERROR_FAILED_SSL_HANDSHAKE) {
+                    Log.w("MainActivity", "SSL handshake failed — not retrying");
+                    return;
+                }
+
                 long now = System.currentTimeMillis();
                 if (reloadInProgress) return;
                 if (now - lastReloadAt < RELOAD_MIN_INTERVAL_MS) return;
@@ -462,7 +483,7 @@ public class MainActivity extends AppCompatActivity {
                 startServerService();
                 view.postDelayed(() -> {
                     if (!isFinishing() && webView != null) {
-                        webView.loadUrl(LOCAL_URL);
+                        webView.loadUrl(currentLocalUrl);
                     }
                 }, delayMs);
             }

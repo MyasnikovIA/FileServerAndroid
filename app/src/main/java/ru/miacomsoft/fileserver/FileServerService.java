@@ -14,7 +14,7 @@ import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
 public class FileServerService extends Service {
-
+    private static volatile String sLocalUrl = "";
     public static final String ACTION_START = "ru.miacomsoft.fileserver.START";
     public static final String ACTION_STOP  = "ru.miacomsoft.fileserver.STOP";
 
@@ -46,6 +46,8 @@ public class FileServerService extends Service {
 
     public static boolean isRunning() { return sRunning; }
     public static String getLastUrl() { return sLastUrl; }
+
+    public static String getLocalUrl() { return sLocalUrl; }
 
     @Override
     public void onCreate() {
@@ -88,22 +90,25 @@ public class FileServerService extends Service {
                 srv.start();
 
                 synchronized (lock) {
-                    server = srv;
-                    sRunning = true;
-                    sLastUrl = srv.getListenUrl();
+                    server    = srv;
+                    sRunning  = true;
+                    sLastUrl  = srv.getListenUrl();   // http(s)://<ip>:port
+                    sLocalUrl = srv.getLocalUrl();    // http(s)://127.0.0.1:port
                     isStarting = false;
                 }
                 notifyState();
-                Log.i(TAG, "Server started: " + sLastUrl);
+                Log.i(TAG, "Server started: " + sLastUrl
+                        + " (local: " + sLocalUrl + ")");
             } catch (Exception e) {
                 Log.e(TAG, "Server start failed", e);
                 synchronized (lock) {
                     if (srv != null) {
                         try { srv.stop(); } catch (Exception ignored) {}
                     }
-                    server = null;
-                    sRunning = false;
-                    sLastUrl = "";
+                    server    = null;
+                    sRunning  = false;
+                    sLastUrl  = "";
+                    sLocalUrl = "";
                     isStarting = false;
                 }
                 notifyState();
@@ -119,18 +124,17 @@ public class FileServerService extends Service {
         synchronized (lock) {
             srv = server;
             t = serverThread;
-            server = null;
+            server     = null;
             serverThread = null;
-            sRunning = false;
+            sRunning   = false;
             isStarting = false;
-            sLastUrl = "";
+            sLastUrl   = "";
+            sLocalUrl  = "";
         }
         if (srv != null) {
             try { srv.stop(); } catch (Exception e) { Log.w(TAG, "stop", e); }
         }
-        if (t != null) {
-            t.interrupt();
-        }
+        if (t != null) t.interrupt();
         notifyState();
     }
 
