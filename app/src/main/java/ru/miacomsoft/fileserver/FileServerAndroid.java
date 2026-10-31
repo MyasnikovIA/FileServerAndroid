@@ -558,7 +558,7 @@ public class FileServerAndroid {
 
         // Проверяем, есть ли config.json в публичной папке Download
         // Если есть — используем его (удобно для отладки)
-        Path externalCfg = java.nio.file.Paths.get("/storage/emulated/0/Download/config.json");
+        Path externalCfg = java.nio.file.Paths.get("/storage/emulated/0/Download/certs/config.json");
 
         if (Files.exists(externalCfg)) {
             Log.i(TAG, "Using external config: " + externalCfg);

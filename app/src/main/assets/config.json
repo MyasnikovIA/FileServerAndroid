@@ -3,19 +3,23 @@
     "port": 8080,
     "host": "0.0.0.0"
   },
-
   "https": {
     "enabled": true,
-    "keystore": "/storage/emulated/0/Download/certs/keystore.p12",
+    "cert": "",
+    "key": "",
+    "keystore": "\/storage\/emulated\/0\/Download\/certs\/keystore.p12",
     "password": "changeit"
   },
-
   "web": "www",
-
+  "ollama": {
+    "enabled": false,
+    "binary": "ollama",
+    "cwd": ""
+  },
   "autostart": {
     "jsScripts": [
       {
-        "url": "js/custom-startup.js"
+        "url": "js\/custom-startup.js"
       }
     ],
     "wmApps": [
@@ -35,12 +39,79 @@
   ],
   "shares": [
     {
-      "name": "",
-      "physical": "/storage/emulated/0",
+      "name": "UsersDir",
+      "physical": "\/storage\/emulated\/0",
       "type": "folder",
-      "access": ["read", "write", "delete"],
+      "access": [
+        "read",
+        "write",
+        "delete"
+      ],
       "anonymous": false,
-      "users": ["admin"]
+      "users": [
+        "admin"
+      ],
+      "quota": -1
+    },
+    {
+      "name": "Download",
+      "physical": "\/storage\/emulated\/0\/Download",
+      "type": "folder",
+      "access": [
+        "read",
+        "write",
+        "delete"
+      ],
+      "anonymous": false,
+      "users": [
+        "admin"
+      ],
+      "quota": -1
+    },
+    {
+      "name": "Storage",
+      "physical": "\/storage",
+      "type": "folder",
+      "access": [
+        "read",
+        "write",
+        "delete"
+      ],
+      "anonymous": false,
+      "users": [
+        "admin"
+      ],
+      "quota": -1
+    },
+    {
+      "name": "MICROSD_32G",
+      "physical": "\/storage\/243069A530697F24",
+      "type": "folder",
+      "access": [
+        "read",
+        "write",
+        "delete"
+      ],
+      "anonymous": false,
+      "users": [
+        "admin"
+      ],
+      "quota": -1
+    },
+    {
+      "name": "Realtek_USB_drive",
+      "physical": "\/storage\/01DD35A8733A2070",
+      "type": "folder",
+      "access": [
+        "read",
+        "write",
+        "delete"
+      ],
+      "anonymous": false,
+      "users": [
+        "admin"
+      ],
+      "quota": -1
     }
   ]
 }
