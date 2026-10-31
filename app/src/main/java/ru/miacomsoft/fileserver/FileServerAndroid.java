@@ -54,6 +54,26 @@ public class FileServerAndroid {
 
     private BroadcastReceiver mediaReceiver;
 
+// ============================================================
+// Горячая перезагрузка config.json
+// ============================================================
+
+    /** Период поллинга mtime config-файла. */
+    private static final long CONFIG_POLL_MS = 2000L;
+
+    /** Поток-наблюдатель за config.json. */
+    private volatile Thread configWatcherThread;
+
+    /** Последний известный mtime config.json. */
+    private volatile long lastConfigMtime = 0L;
+
+    /**
+     * Если > now — игнорируем изменения mtime: это наша собственная
+     * запись через Config.save() в rescanAndRemountShares(), а не
+     * пользовательская правка.
+     */
+    private volatile long suppressConfigReloadUntil = 0L;
+
     public FileServerAndroid(Context ctx) {
         this.context = ctx.getApplicationContext();
     }
@@ -154,6 +174,7 @@ public class FileServerAndroid {
         server = srv;
 
         registerMediaReceiver();
+        startConfigWatcher();          // <-- ДОБАВЛЕНО
 
         new Thread(() -> {
             try {
@@ -169,6 +190,7 @@ public class FileServerAndroid {
     }
 
     public void stop() {
+        stopConfigWatcher();
         unregisterMediaReceiver();
         if (server != null) {
             try { server.stop(0); } catch (Exception ignored) {}
@@ -446,6 +468,7 @@ public class FileServerAndroid {
         // 5. Сохраняем (иначе обновления потеряются при перезапуске)
         try {
             config.save(FileServer.configPath());
+            noteInternalConfigSave();
             Log.i(TAG, "Shares updated and saved");
         } catch (Exception ex) {
             Log.e(TAG, "Failed to save config after rescan", ex);
@@ -640,7 +663,190 @@ public class FileServerAndroid {
             }
         }
     }
+// ============================================================
+// Горячая перезагрузка config.json — наблюдатель
+// ============================================================
 
+    private void startConfigWatcher() {
+        if (configTemp == null) return;
+
+        try {
+            lastConfigMtime = Files.getLastModifiedTime(configTemp).toMillis();
+        } catch (IOException e) {
+            lastConfigMtime = 0L;
+        }
+
+        final Path watchPath = configTemp;
+
+        configWatcherThread = new Thread(() -> {
+            Log.i(TAG, "ConfigWatcher: started for " + watchPath
+                    + ", mtime=" + lastConfigMtime);
+
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    Thread.sleep(CONFIG_POLL_MS);
+                } catch (InterruptedException ie) {
+                    return;
+                }
+                try {
+                    if (!Files.exists(watchPath)) continue;
+
+                    long mtime = Files.getLastModifiedTime(watchPath).toMillis();
+                    if (mtime <= lastConfigMtime) continue;
+
+                    // Пауза: даём писателю завершить запись (некоторые
+                    // редакторы пишут в 2 приёма: truncate + write).
+                    try { Thread.sleep(300); }
+                    catch (InterruptedException ie) { return; }
+
+                    mtime = Files.getLastModifiedTime(watchPath).toMillis();
+                    lastConfigMtime = mtime;
+
+                    if (System.currentTimeMillis() < suppressConfigReloadUntil) {
+                        Log.i(TAG, "ConfigWatcher: change is internal, skipped");
+                        continue;
+                    }
+
+                    Log.i(TAG, "ConfigWatcher: mtime changed → reload");
+                    reloadConfig();
+
+                } catch (Exception e) {
+                    Log.w(TAG, "ConfigWatcher poll error: " + e.getMessage());
+                }
+            }
+        }, "ConfigWatcher");
+        configWatcherThread.setDaemon(true);
+        configWatcherThread.start();
+    }
+
+    private void stopConfigWatcher() {
+        Thread t = configWatcherThread;
+        configWatcherThread = null;
+        if (t != null) {
+            t.interrupt();
+            Log.i(TAG, "ConfigWatcher: stopped");
+        }
+    }
+
+    /**
+     * Помечает последнюю запись config.json как "свою" —
+     * чтобы наблюдатель не запускал бессмысленный reload.
+     */
+    private void noteInternalConfigSave() {
+        suppressConfigReloadUntil = System.currentTimeMillis() + 3000L;
+        if (configTemp != null) {
+            try {
+                lastConfigMtime = Files.getLastModifiedTime(configTemp).toMillis();
+            } catch (IOException ignored) {}
+        }
+    }
+
+// ============================================================
+// Горячая перезагрузка config.json — применение
+// ============================================================
+
+    /**
+     * Перечитывает config.json и применяет изменившиеся параметры.
+     *
+     * Применяется ДИНАМИЧЕСКИ:
+     *   • shares        — список, пути, права, квоты;
+     *   • users         — пароли, квоты, флаги;
+     *   • autostart.*   — списки;
+     *   • ollama.binary / cwd (флаг enabled принудительно false).
+     *
+     * ТРЕБУЕТ ПОЛНОГО ПЕРЕЗАПУСКА (пишется предупреждение в лог,
+     * изменения игнорируются):
+     *   • http.host, http.port;
+     *   • https.enabled, https.keystore/password/cert/key;
+     *   • web (каталог статики).
+     *
+     * После успешной перезагрузки:
+     *   – config/auth/quota заменяются;
+     *   – FileServer.bind() обновляет статические геттеры
+     *     (config(), auth(), quota()) — все обработчики (ApiHandler,
+     *     RootHandler, ProxyHandler, AndroidBridge, ...) видят новый
+     *     config автоматически, т.к. получают его через FileServer.*;
+     *   – FileWatcher перезапускается для нового набора shares;
+     *   – кэш квот сбрасывается.
+     */
+    private synchronized void reloadConfig() {
+        if (configTemp == null) return;
+
+        Log.i(TAG, "reloadConfig: config changed, reloading...");
+
+        Config newCfg;
+        try {
+            newCfg = Config.load(configTemp);
+        } catch (Exception e) {
+            Log.e(TAG, "reloadConfig: Config.load failed, keeping old config", e);
+            return;
+        }
+
+        // --- Принудительные Android-настройки ---
+        newCfg.videoChatEnabled = false;
+        newCfg.hermesEnabled    = false;
+        newCfg.ollamaEnabled    = false;
+        newCfg.consoleShell     = "";
+        newCfg.consoleCwd       = "";
+
+        // --- http.host / http.port: только лог ---
+        if (newCfg.port != config.port) {
+            Log.w(TAG, "reloadConfig: http.port change (" + config.port + " → "
+                    + newCfg.port + ") requires full restart — keeping " + config.port);
+        }
+        if (newCfg.host == null ? config.host != null : !newCfg.host.equals(config.host)) {
+            Log.w(TAG, "reloadConfig: http.host change requires full restart — keeping "
+                    + config.host);
+        }
+        newCfg.port = config.port;
+        newCfg.host = config.host;
+
+        // --- https.*: только лог ---
+        if (newCfg.httpsEnabled != config.httpsEnabled) {
+            Log.w(TAG, "reloadConfig: https.enabled change requires restart");
+        }
+        newCfg.httpsEnabled  = config.httpsEnabled;
+        newCfg.httpsKeystore = config.httpsKeystore;
+        newCfg.httpsPassword = config.httpsPassword;
+        newCfg.httpsCert     = config.httpsCert;
+        newCfg.httpsKey      = config.httpsKey;
+
+        // --- web: только лог ---
+        if (newCfg.webPath == null ? config.webPath != null : !newCfg.webPath.equals(config.webPath)) {
+            Log.w(TAG, "reloadConfig: web path change requires restart — keeping "
+                    + config.webPath);
+        }
+        newCfg.webPath = config.webPath;
+
+        // --- swap ---
+        Config oldCfg = this.config;
+        this.config = newCfg;
+        this.auth   = new AuthService(newCfg, tokens);
+        this.quota  = new QuotaService(this.auth);
+        this.quota.invalidateAll();
+
+        // --- обновить статические ссылки FileServer ---
+        FileServer.bind(this, configTemp);
+
+        // --- перезапустить FileWatcher под новый набор shares ---
+        restartFileWatcher();
+
+        Log.i(TAG, "reloadConfig OK: shares=" + newCfg.shares.size()
+                + " (was " + oldCfg.shares.size() + "), users=" + newCfg.users.size()
+                + " (was " + oldCfg.users.size() + ")");
+    }
+
+    private void restartFileWatcher() {
+        if (fileWatcher != null) {
+            try { fileWatcher.stop(); } catch (Exception ignored) {}
+            fileWatcher = null;
+        }
+        try {
+            startWatcher();
+        } catch (Exception e) {
+            Log.w(TAG, "restartFileWatcher failed: " + e.getMessage());
+        }
+    }
     Config config()          { return config; }
     AuthService auth()       { return auth; }
     TokenService tokens()    { return tokens; }

@@ -14,15 +14,15 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class FileServer {
 
-    private static Config config;
-    private static TokenService tokens;
-    private static AuthService auth;
-    private static QuotaService quota;
-    private static Path webRoot;
-    private static StaticHandler staticHandler;
-    private static RootHandler rootHandler;
-    private static Path configPath;
 
+    private static volatile Config config;
+    private static volatile TokenService tokens;
+    private static volatile AuthService auth;
+    private static volatile QuotaService quota;
+    private static volatile Path webRoot;
+    private static volatile StaticHandler staticHandler;
+    private static volatile RootHandler rootHandler;
+    private static volatile Path configPath;
     static final Map<String, SseConnection> sseClients = new ConcurrentHashMap<>();
 
     static void bind(FileServerAndroid inst, Path cfgPath) {
