@@ -55,8 +55,19 @@ public class BrowserActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
 
         String startUrl = getIntent().getStringExtra(EXTRA_URL);
-        String title    = getIntent().getStringExtra(EXTRA_TITLE);
-        if (startUrl == null || startUrl.isEmpty()) startUrl = "https://www.google.com";
+
+        // ФИКС: Если передан localhost, заменяем на реальный IP
+        if (startUrl != null && startUrl.contains("127.0.0.1")) {
+            String realIp = getLocalIpAddress();
+            startUrl = startUrl.replace("127.0.0.1", realIp);
+            Log.i(TAG, "Replaced localhost with real IP: " + startUrl);
+        }
+
+        String title = getIntent().getStringExtra(EXTRA_TITLE);
+        if (startUrl == null || startUrl.isEmpty()) {
+            // Если URL не передан, берем из FileServerService
+            startUrl = FileServerService.getLocalUrl();
+        }
         if (title != null && !title.isEmpty()) setTitle(title);
 
         setContentView(R.layout.activity_browser);
@@ -76,6 +87,24 @@ public class BrowserActivity extends AppCompatActivity {
         webView.loadUrl(normalizeUrl(startUrl));
     }
 
+    private String getLocalIpAddress() {
+        try {
+            java.util.Enumeration<java.net.NetworkInterface> en =
+                    java.net.NetworkInterface.getNetworkInterfaces();
+            while (en.hasMoreElements()) {
+                java.net.NetworkInterface ni = en.nextElement();
+                if (ni.isLoopback() || !ni.isUp()) continue;
+                java.util.Enumeration<java.net.InetAddress> addrs = ni.getInetAddresses();
+                while (addrs.hasMoreElements()) {
+                    java.net.InetAddress addr = addrs.nextElement();
+                    if (!addr.isLoopbackAddress() && addr instanceof java.net.Inet4Address) {
+                        return addr.getHostAddress();
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return "192.168.1.1"; // fallback
+    }
     @SuppressLint("SetJavaScriptEnabled")
     private void setupWebView() {
         WebSettings s = webView.getSettings();
@@ -110,9 +139,9 @@ public class BrowserActivity extends AppCompatActivity {
         cm.setAcceptThirdPartyCookies(webView, true);
 
         webView.setWebViewClient(new WebViewClient() {
+            // !!! ИГНОРИРУЕМ ЛЮБЫЕ ОШИБКИ SSL (САМОПОДПИСАННЫЕ СЕРТИФИКАТЫ) !!!
             @Override
             public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-                // !!! ИГНОРИРУЕМ ЛЮБЫЕ ОШИБКИ SSL (САМОПОДПИСАННЫЕ СЕРТИФИКАТЫ) !!!
                 Log.w(TAG, "SSL error: " + error.toString() + " — PROCEEDING ANYWAY.");
                 handler.proceed();
             }

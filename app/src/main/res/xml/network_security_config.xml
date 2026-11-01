@@ -3,8 +3,20 @@
     <!-- Разрешаем всё: cleartext (HTTP) и доверяем любым сертификатам (включая самоподписанные) -->
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
+            <!-- Доверяем системным сертификатам -->
             <certificates src="system" />
+            <!-- Доверяем пользовательским сертификатам (для самоподписанных) -->
             <certificates src="user" />
         </trust-anchors>
     </base-config>
+    <!-- Специально для локальной сети (если нужно жестче) -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">192.168.15.191</domain>
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </domain-config>
 </network-security-config>

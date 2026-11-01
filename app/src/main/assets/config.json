@@ -3,19 +3,8 @@
     "port": 8080,
     "host": "0.0.0.0"
   },
-  "https": {
-    "enabled": true,
-    "cert": "",
-    "key": "",
-    "keystore": "\/storage\/emulated\/0\/Download\/certs\/keystore.p12",
-    "password": "changeit"
-  },
+
   "web": "www",
-  "ollama": {
-    "enabled": false,
-    "binary": "ollama",
-    "cwd": ""
-  },
   "autostart": {
     "jsScripts": [
       {

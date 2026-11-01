@@ -36,44 +36,38 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
-
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
-
 import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
-
+    private static final String TAG = "MainActivity";
     private String currentLocalUrl = "http://127.0.0.1:8080/";
     private static final int REQ_FILE_CHOOSER = 1001;
-
     private static final String LAUNCH_MARKER = "__LAUNCH_APP__|";
-
     private static final long RELOAD_MIN_INTERVAL_MS = 5000L;
     private long lastReloadAt = 0L;
     private boolean reloadInProgress = false;
     private int reloadAttempt = 0;
+    private WebView webView;
+    private LinearLayout loadingView;
+    private ProgressBar loadingProgress;
+    private TextView loadingText;
 
     private static final long RELOAD_APPS_MIN_INTERVAL_MS = 30000L;
     private long lastReloadAppsAt = 0L;
-
     private float _downX = 0f, _downY = 0f;
     private long _downTime = 0L;
-
-    private WebView      webView;
-    private LinearLayout loadingView;
-    private ProgressBar  loadingProgress;
-    private TextView     loadingText;
     private Button       permissionBtn;
-
     private boolean urlLoaded = false;
-
     private ValueCallback<Uri[]> filePathCallback;
+    private WebViewFallbackManager fallbackManager;
+    private boolean fallbackActivated = false;
 
     private final ActivityResultLauncher<String[]> permissionLauncher =
             registerForActivityResult(
@@ -91,33 +85,60 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Log.i(TAG, "VERSION 2026-10-30 v5 — SSL ignore for WM iframes");
 
-        Log.i("MainActivity", "VERSION 2026-10-30 v5 — SSL ignore for WM iframes");
+        // Проверяем совместимость WebView
+        WebViewCompatHelper.WorkMode workMode =
+                WebViewCompatHelper.getOptimalWorkMode(this);
+        Log.i(TAG, "Work mode: " + workMode);
+
+        if (workMode == WebViewCompatHelper.WorkMode.NATIVE_BROWSER) {
+            // WebView критически устарел - сразу используем встроенный браузер
+            Log.w(TAG, "WebView too old, using native browser");
+            Toast.makeText(this,
+                    "WebView устарел. Используется встроенный браузер.",
+                    Toast.LENGTH_LONG).show();
+            openNativeBrowser();
+            finish();
+            return;
+        }
 
         getWindow().setFlags(
                 WindowManager.LayoutParams.FLAG_FULLSCREEN,
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
-
         setContentView(R.layout.activity_main);
         applyImmersive();
-
         webView          = findViewById(R.id.webView);
         loadingView      = findViewById(R.id.loadingView);
         loadingProgress  = findViewById(R.id.loadingProgress);
         loadingText      = findViewById(R.id.loadingText);
         permissionBtn    = findViewById(R.id.permissionBtn);
-
         permissionBtn.setOnClickListener(v -> requestPermissions());
+
+        // Инициализируем fallback менеджер
+        fallbackManager = new WebViewFallbackManager(this, webView);
+        fallbackManager.setFallbackListener(new WebViewFallbackManager.FallbackListener() {
+            @Override
+            public void onWebViewFailed(String error) {
+                Log.e(TAG, "WebView failed: " + error);
+            }
+
+            @Override
+            public void onFallbackActivated() {
+                fallbackActivated = true;
+            }
+        });
+
         setupWebView();
 
         FileServerService.setStateListener((running, url) -> runOnUiThread(() -> {
-            if (running && !urlLoaded) {
+            if (running && !urlLoaded && !fallbackActivated) {
                 String localUrl = FileServerService.getLocalUrl();
                 if (localUrl != null && !localUrl.isEmpty()) {
                     currentLocalUrl = localUrl.endsWith("/") ? localUrl : localUrl + "/";
                 }
                 urlLoaded = true;
-                Log.i("MainActivity", "Loading: " + currentLocalUrl);
+                Log.i(TAG, "Loading: " + currentLocalUrl);
                 webView.loadUrl(currentLocalUrl);
             }
         }));
@@ -136,17 +157,67 @@ public class MainActivity extends AppCompatActivity {
         evaluateState();
     }
 
+    /**
+     * Открывает встроенный браузер вместо WebView.
+     */
+    private void openNativeBrowser() {
+        String url = FileServerService.isRunning()
+                ? FileServerService.getLocalUrl()
+                : "http://127.0.0.1:8080/";
+
+        Intent intent = new Intent(this, BrowserActivity.class);
+        intent.putExtra(BrowserActivity.EXTRA_URL, url);
+        intent.putExtra(BrowserActivity.EXTRA_TITLE, "FileServer");
+        startActivity(intent);
+    }
+
+    /**
+     * Показывает опции fallback при критической ошибке WebView.
+     */
+    public void showFallbackOptions(String error) {
+        if (isFinishing()) return;
+
+        new AlertDialog.Builder(this)
+                .setTitle("Ошибка WebView")
+                .setMessage("Встроенный браузер не может отобразить интерфейс.\n\n"
+                        + "Ошибка: " + error + "\n\n"
+                        + "Попробовать встроенный браузер?")
+                .setPositiveButton("Встроенный браузер", (d, w) -> {
+                    openNativeBrowser();
+                    finish();
+                })
+                .setNegativeButton("Обновить WebView", (d, w) -> {
+                    try {
+                        Intent intent = new Intent(Intent.ACTION_VIEW);
+                        intent.setData(Uri.parse(
+                                "https://play.google.com/store/apps/details?id=com.google.android.webview"));
+                        startActivity(intent);
+                    } catch (Exception e) {
+                        Toast.makeText(this,
+                                "Google Play недоступен",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNeutralButton("Повторить", (d, w) -> {
+                    fallbackActivated = false;
+                    reloadAttempt = 0;
+                    if (webView != null) {
+                        webView.loadUrl(currentLocalUrl);
+                    }
+                })
+                .setCancelable(false)
+                .show();
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
         applyImmersive();
         evaluateState();
-
         try { AndroidBridge.retryPendingInstall(this); }
-        catch (Exception e) { Log.w("MainActivity", "retryPendingInstall", e); }
-
+        catch (Exception e) { Log.w(TAG, "retryPendingInstall", e); }
         long now = System.currentTimeMillis();
-        if (webView != null && urlLoaded
+        if (webView != null && urlLoaded && !fallbackActivated
                 && (now - lastReloadAppsAt) > RELOAD_APPS_MIN_INTERVAL_MS) {
             lastReloadAppsAt = now;
             webView.evaluateJavascript(
@@ -262,16 +333,16 @@ public class MainActivity extends AppCompatActivity {
         if (!hasFilesPermission()) { showPermissionScreen(); return; }
         permissionBtn.setVisibility(View.GONE);
         if (urlLoaded) return;
-
         if (FileServerService.isRunning()) {
             showLoading("Подключение…");
-
             String localUrl = FileServerService.getLocalUrl();
             if (localUrl != null && !localUrl.isEmpty()) {
                 currentLocalUrl = localUrl.endsWith("/") ? localUrl : localUrl + "/";
             }
             urlLoaded = true;
-            webView.loadUrl(currentLocalUrl);
+            if (!fallbackActivated && webView != null) {
+                webView.loadUrl(currentLocalUrl);
+            }
         } else {
             showLoading("Запуск сервера…");
             startServerService();
@@ -317,11 +388,11 @@ public class MainActivity extends AppCompatActivity {
         s.setSupportZoom(false);
         s.setBuiltInZoomControls(false);
         s.setJavaScriptCanOpenWindowsAutomatically(false);
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         }
 
+        // Убираем "wv" из User-Agent, чтобы сайты не блокировали WebView
         String ua = s.getUserAgentString();
         if (ua != null && ua.contains("wv")) {
             ua = ua.replace("; wv", "");
@@ -337,6 +408,7 @@ public class MainActivity extends AppCompatActivity {
         webView.setHapticFeedbackEnabled(false);
         webView.addJavascriptInterface(new AndroidBridge(this), "AndroidBridge");
 
+        // Обработка касаний для запуска приложений из веб-интерфейса
         webView.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
@@ -346,7 +418,6 @@ public class MainActivity extends AppCompatActivity {
                         _downY = event.getY();
                         _downTime = System.currentTimeMillis();
                         return false;
-
                     case MotionEvent.ACTION_UP:
                     case MotionEvent.ACTION_CANCEL: {
                         if (event.getActionMasked() != MotionEvent.ACTION_UP) {
@@ -357,12 +428,9 @@ public class MainActivity extends AppCompatActivity {
                         long dt = System.currentTimeMillis() - _downTime;
                         float density = getResources().getDisplayMetrics().density;
                         float limit = 30f * density;
-
-                        if (Math.abs(dx) > limit || Math.abs(dy) > limit
-                                || dt > 800 || dt < 15) {
+                        if (Math.abs(dx) > limit || Math.abs(dy) > limit || dt > 800 || dt < 15) {
                             return false;
                         }
-
                         webView.evaluateJavascript(
                                 "(function(){" +
                                         "  try {" +
@@ -375,26 +443,18 @@ public class MainActivity extends AppCompatActivity {
                                     if (result == null) return;
                                     String clean = result.trim();
                                     if (clean.startsWith("\"")) clean = clean.substring(1);
-                                    if (clean.endsWith("\""))
-                                        clean = clean.substring(0, clean.length() - 1);
+                                    if (clean.endsWith("\"")) clean = clean.substring(0, clean.length() - 1);
                                     if (clean.isEmpty() || "null".equals(clean)) return;
-
                                     String[] p = clean.split("\\|", -1);
-                                    String pkg   = p.length > 0 ? p[0] : "";
-                                    String act   = p.length > 1 ? p[1] : "";
+                                    String pkg = p.length > 0 ? p[0] : "";
+                                    String act = p.length > 1 ? p[1] : "";
                                     String appId = p.length > 2 ? p[2] : "";
-
                                     if (!pkg.isEmpty()) {
-                                        Log.i("MainActivity",
-                                                "Native ACTION_UP launch: " + pkg + "/" + act);
-                                        Toast.makeText(MainActivity.this,
-                                                "Запуск: " + pkg,
-                                                Toast.LENGTH_SHORT).show();
-                                        new AndroidBridge(MainActivity.this)
-                                                .launchApp(pkg, act);
+                                        Log.i(TAG, "Native ACTION_UP launch: " + pkg + "/" + act);
+                                        Toast.makeText(MainActivity.this, "Запуск: " + pkg, Toast.LENGTH_SHORT).show();
+                                        new AndroidBridge(MainActivity.this).launchApp(pkg, act);
                                     } else if (!appId.isEmpty()) {
-                                        Log.i("MainActivity",
-                                                "Native ACTION_UP WM app: " + appId);
+                                        Log.i(TAG, "Native ACTION_UP WM app: " + appId);
                                         String safe = appId.replace("'", "\\'");
                                         webView.evaluateJavascript(
                                                 "try { var a = FAR.WM.getApp('" + safe + "'); " +
@@ -409,20 +469,25 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        // ============================================================
+        // WebViewClient с обработкой SSL и перезагрузкой
+        // ============================================================
         webView.setWebViewClient(new WebViewClient() {
 
-            // !!! РАЗРЕШАЕМ ИГНОРИРОВАТЬ ОШИБКИ SSL В IFrame !!!
+            // !!! КРИТИЧЕСКИ ВАЖНО: Игнорируем ошибки SSL для самоподписанных сертификатов !!!
             @Override
             public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-                Log.w("MainActivity", "SSL error (iframe): " + error.toString() + " — proceeding.");
+                Log.w(TAG, "SSL error: " + error.toString() + " — proceeding anyway.");
                 handler.proceed();
             }
 
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                // Скрываем экран загрузки, как только началась загрузка страницы
                 hideLoading();
-                if (url != null
-                        && (url.contains("127.0.0.1") || url.contains("localhost"))) {
+
+                // Сбрасываем счётчик ошибок при успешном начале загрузки локального адреса
+                if (url != null && (url.contains("127.0.0.1") || url.contains("localhost"))) {
                     reloadAttempt = 0;
                 }
             }
@@ -430,6 +495,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 reloadInProgress = false;
+                // Патчим window.open, чтобы он не открывал внешние окна, а менял location
                 view.evaluateJavascript(
                         "(function(){" +
                                 "  if (window._farAndroidPatched) return;" +
@@ -446,41 +512,51 @@ public class MainActivity extends AppCompatActivity {
                 Uri uri = request.getUrl();
                 String scheme = uri.getScheme() == null ? "" : uri.getScheme();
                 String host = uri.getHost() == null ? "" : uri.getHost();
+
+                // Локальные адреса загружаем в этом же WebView
                 if ("http".equals(scheme) || "https".equals(scheme)) {
-                    if ("127.0.0.1".equals(host) || "localhost".equals(host)) return false;
+                    if ("127.0.0.1".equals(host) || "localhost".equals(host)) {
+                        return false;
+                    }
                 }
-                try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); }
-                catch (Exception e) {
-                    Toast.makeText(MainActivity.this,
-                            "Не удалось открыть ссылку", Toast.LENGTH_SHORT).show();
+                // Внешние адреса открываем в системном браузере
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, uri));
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Не удалось открыть ссылку", Toast.LENGTH_SHORT).show();
                 }
                 return true;
             }
 
             @Override
-            public void onReceivedError(WebView view, WebResourceRequest request,
-                                        WebResourceError error) {
-                if (!request.isForMainFrame()) return;
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (!request.isForMainFrame()) return; // Игнорируем ошибки iframe
 
-                // SSL-ошибки уже отработаны в onReceivedSslError — не ретраим.
+                // SSL-ошибки уже отработаны выше, не пытаемся их перезагружать
                 if (error.getErrorCode() == WebViewClient.ERROR_FAILED_SSL_HANDSHAKE) {
-                    Log.w("MainActivity", "SSL handshake failed — not retrying");
+                    Log.w(TAG, "SSL handshake failed — not retrying");
                     return;
                 }
 
                 long now = System.currentTimeMillis();
                 if (reloadInProgress) return;
                 if (now - lastReloadAt < RELOAD_MIN_INTERVAL_MS) return;
+
                 lastReloadAt = now;
                 reloadInProgress = true;
-                reloadAttempt++;
+                reloadAttempt++; // <-- УВЕЛИЧИВАЕМ СЧЁТЧИК
+
+                // Экспоненциальная задержка: 1.5с, 3с, 6с, 12с, макс 30с
                 long delayMs = Math.min(1500L * (1L << (reloadAttempt - 1)), 30000L);
-                Log.w("MainActivity", "onReceivedError: reload #" + reloadAttempt
-                        + " in " + delayMs + "ms");
+                Log.w(TAG, "onReceivedError: reload #" + reloadAttempt + " in " + delayMs + "ms");
+
                 Toast.makeText(MainActivity.this,
                         "Сервер недоступен, перезапуск… (попытка " + reloadAttempt + ")",
                         Toast.LENGTH_SHORT).show();
+
+                showLoading("Переподключение…");
                 startServerService();
+
                 view.postDelayed(() -> {
                     if (!isFinishing() && webView != null) {
                         webView.loadUrl(currentLocalUrl);
@@ -491,43 +567,39 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
                 if (!isFinishing()) {
-                    Toast.makeText(MainActivity.this,
-                            "WebView перезапускается", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "WebView перезапускается", Toast.LENGTH_SHORT).show();
                     recreate();
                 }
                 return true;
             }
         });
 
+        // ============================================================
+        // WebChromeClient
+        // ============================================================
         webView.setWebChromeClient(new WebChromeClient() {
-
             @Override
             public boolean onConsoleMessage(ConsoleMessage cm) {
                 String msg = cm.message();
-                if (msg != null && msg.startsWith(LAUNCH_MARKER)) {
-                    String[] parts = msg.substring(LAUNCH_MARKER.length())
-                            .split("\\|", 2);
+                if (msg != null && msg.startsWith("__LAUNCH_APP__|")) {
+                    String[] parts = msg.substring("__LAUNCH_APP__|".length()).split("\\|", 2);
                     if (parts.length >= 1 && !parts[0].isEmpty()) {
                         String pkg = parts[0];
                         String act = parts.length > 1 ? parts[1] : "";
-                        Log.i("MainActivity", "Console marker launch: " + pkg + "/" + act);
+                        Log.i(TAG, "Console marker launch: " + pkg + "/" + act);
                         new AndroidBridge(MainActivity.this).launchApp(pkg, act);
                     }
                     return true;
                 }
-
                 switch (cm.messageLevel()) {
                     case ERROR:
-                        Log.e("WebViewJS", msg + " ("
-                                + cm.sourceId() + ":" + cm.lineNumber() + ")");
+                        Log.e("WebViewJS", msg + " (" + cm.sourceId() + ":" + cm.lineNumber() + ")");
                         break;
                     case WARNING:
-                        Log.w("WebViewJS", msg + " ("
-                                + cm.sourceId() + ":" + cm.lineNumber() + ")");
+                        Log.w("WebViewJS", msg + " (" + cm.sourceId() + ":" + cm.lineNumber() + ")");
                         break;
                     default:
-                        Log.i("WebViewJS", msg + " ("
-                                + cm.sourceId() + ":" + cm.lineNumber() + ")");
+                        Log.i("WebViewJS", msg + " (" + cm.sourceId() + ":" + cm.lineNumber() + ")");
                 }
                 return true;
             }
@@ -550,58 +622,137 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public boolean onJsPrompt(WebView view, String url, String message,
-                                      String defaultValue, JsPromptResult r) {
+            public boolean onJsPrompt(WebView view, String url, String message, String defaultValue, JsPromptResult r) {
                 final android.widget.EditText input = new android.widget.EditText(MainActivity.this);
                 if (defaultValue != null) input.setText(defaultValue);
                 new AlertDialog.Builder(MainActivity.this).setMessage(message).setView(input)
-                        .setPositiveButton(android.R.string.ok,
-                                (d, w) -> r.confirm(input.getText().toString()))
+                        .setPositiveButton(android.R.string.ok, (d, w) -> r.confirm(input.getText().toString()))
                         .setNegativeButton(android.R.string.cancel, (d, w) -> r.cancel())
                         .setOnCancelListener(d -> r.cancel()).show();
                 return true;
             }
 
             @Override
-            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> cb,
-                                             FileChooserParams params) {
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> cb, FileChooserParams params) {
                 if (filePathCallback != null) filePathCallback.onReceiveValue(null);
                 filePathCallback = cb;
                 try {
-                    startActivityForResult(params.createIntent(), REQ_FILE_CHOOSER);
+                    startActivityForResult(params.createIntent(), 1001);
                     return true;
                 } catch (Exception e) {
                     filePathCallback = null;
-                    Toast.makeText(MainActivity.this,
-                            "Не удалось открыть выбор файлов: " + e.getMessage(),
-                            Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "Не удалось открыть выбор файлов: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                     return false;
                 }
             }
         });
 
+        // ============================================================
+        // DownloadListener
+        // ============================================================
         webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
             if (url == null) return;
             if (url.startsWith("blob:") || url.startsWith("data:")) {
-                Toast.makeText(MainActivity.this,
-                        "Файл уже в файловой системе устройства", Toast.LENGTH_LONG).show();
+                Toast.makeText(MainActivity.this, "Файл уже в файловой системе устройства", Toast.LENGTH_LONG).show();
                 return;
             }
             if (url.startsWith("http://") || url.startsWith("https://")) {
                 try {
                     DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
-                    String fn = android.webkit.URLUtil.guessFileName(
-                            url, contentDisposition, mimeType);
+                    String fn = android.webkit.URLUtil.guessFileName(url, contentDisposition, mimeType);
                     req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fn);
-                    req.setNotificationVisibility(
-                            DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                    req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
                     DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
                     if (dm != null) dm.enqueue(req);
                 } catch (Exception e) {
-                    Toast.makeText(MainActivity.this,
-                            "Ошибка загрузки: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    Toast.makeText(MainActivity.this, "Ошибка загрузки: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 }
             }
         });
+    }
+
+    /**
+     * Создаёт стандартный WebViewClient (если fallback менеджер не инициализирован).
+     */
+    private WebViewClient createDefaultWebViewClient() {
+        return new WebViewClient() {
+            @Override
+            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                Log.w(TAG, "SSL error (iframe): " + error.toString() + " — proceeding.");
+                handler.proceed();
+            }
+            @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                hideLoading();
+                if (url != null
+                        && (url.contains("127.0.0.1") || url.contains("localhost"))) {
+                    reloadAttempt = 0;
+                }
+            }
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                reloadInProgress = false;
+                view.evaluateJavascript(
+                        "(function(){" +
+                                "  if (window._farAndroidPatched) return;" +
+                                "  window._farAndroidPatched = true;" +
+                                "  window.open = function(u){" +
+                                "    if (u && typeof u === 'string') location.href = u;" +
+                                "    return null;" +
+                                "  };" +
+                                "})();", null);
+            }
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                Uri uri = request.getUrl();
+                String scheme = uri.getScheme() == null ? "" : uri.getScheme();
+                String host = uri.getHost() == null ? "" : uri.getHost();
+                if ("http".equals(scheme) || "https".equals(scheme)) {
+                    if ("127.0.0.1".equals(host) || "localhost".equals(host)) return false;
+                }
+                try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); }
+                catch (Exception e) {
+                    Toast.makeText(MainActivity.this,
+                            "Не удалось открыть ссылку", Toast.LENGTH_SHORT).show();
+                }
+                return true;
+            }
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request,
+                                        WebResourceError error) {
+                if (!request.isForMainFrame()) return;
+                if (error.getErrorCode() == WebViewClient.ERROR_FAILED_SSL_HANDSHAKE) {
+                    Log.w(TAG, "SSL handshake failed — not retrying");
+                    return;
+                }
+                long now = System.currentTimeMillis();
+                if (reloadInProgress) return;
+                if (now - lastReloadAt < RELOAD_MIN_INTERVAL_MS) return;
+                lastReloadAt = now;
+                reloadInProgress = true;
+                reloadAttempt++;
+                long delayMs = Math.min(1500L * (1L << (reloadAttempt - 1)), 30000L);
+                Log.w(TAG, "onReceivedError: reload #" + reloadAttempt
+                        + " in " + delayMs + "ms");
+                Toast.makeText(MainActivity.this,
+                        "Сервер недоступен, перезапуск… (попытка " + reloadAttempt + ")",
+                        Toast.LENGTH_SHORT).show();
+                startServerService();
+                view.postDelayed(() -> {
+                    if (!isFinishing() && webView != null) {
+                        webView.loadUrl(currentLocalUrl);
+                    }
+                }, delayMs);
+            }
+            @Override
+            public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                if (!isFinishing()) {
+                    Toast.makeText(MainActivity.this,
+                            "WebView перезапускается", Toast.LENGTH_SHORT).show();
+                    recreate();
+                }
+                return true;
+            }
+        };
     }
 }

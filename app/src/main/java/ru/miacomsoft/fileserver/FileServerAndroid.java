@@ -8,18 +8,11 @@ import android.os.Build;
 import android.os.storage.StorageManager;
 import android.os.storage.StorageVolume;
 import android.util.Log;
-
 import com.sun.net.httpserver.HttpServer;
-
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -28,22 +21,17 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
-import java.util.stream.Stream;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsServer;
-
-import java.nio.file.Paths;
-
 import javax.net.ssl.SSLContext;
-public class FileServerAndroid {
 
+public class FileServerAndroid {
     private ServerCopyService serverCopy;
     private static final String TAG = "FileServerAndroid";
     private String actualProtocol = "http";
     private final Context context;
     private HttpServer server;
     private Path configTemp;
-
     private Config config;
     private TokenService tokens;
     private AuthService auth;
@@ -52,27 +40,14 @@ public class FileServerAndroid {
     private Path webRoot;
     private StaticHandler staticHandler;
     private RootHandler   rootHandler;
-
     private BroadcastReceiver mediaReceiver;
 
-// ============================================================
-// Горячая перезагрузка config.json
-// ============================================================
-
-    /** Период поллинга mtime config-файла. */
+    // ============================================================
+    // Горячая перезагрузка config.json
+    // ============================================================
     private static final long CONFIG_POLL_MS = 2000L;
-
-    /** Поток-наблюдатель за config.json. */
     private volatile Thread configWatcherThread;
-
-    /** Последний известный mtime config.json. */
     private volatile long lastConfigMtime = 0L;
-
-    /**
-     * Если > now — игнорируем изменения mtime: это наша собственная
-     * запись через Config.save() в rescanAndRemountShares(), а не
-     * пользовательская правка.
-     */
     private volatile long suppressConfigReloadUntil = 0L;
 
     public FileServerAndroid(Context ctx) {
@@ -80,13 +55,14 @@ public class FileServerAndroid {
     }
 
     public void start() throws Exception {
-        prepareWebRoot();
-        prepareConfig();
+        // Инициализация проекта
+        ProjectInitializer.InitResult init = ProjectInitializer.initialize(context);
+        this.webRoot = init.webRoot;
+        this.configTemp = init.configPath;
 
         config = Config.load(configTemp);
         config.host = "0.0.0.0";
         config.port = 8080;
-
         config.videoChatEnabled = false;
         config.hermesEnabled    = false;
         config.ollamaEnabled    = false;
@@ -96,11 +72,9 @@ public class FileServerAndroid {
         tokens = new TokenService();
         auth   = new AuthService(config, tokens);
         quota  = new QuotaService(auth);
-
         staticHandler = new StaticHandler(webRoot);
         rootHandler   = new RootHandler(staticHandler);
         serverCopy = new ServerCopyService();
-
         FileServer.bind(this, configTemp);
 
         // ============================================================
@@ -108,10 +82,8 @@ public class FileServerAndroid {
         // ============================================================
         SSLContext sslContext = null;
         boolean httpsMode = false;
-
         if (config.httpsEnabled) {
             Path keystorePath = resolveHttpsKeystore();
-
             if (keystorePath == null) {
                 Log.w(TAG, "HTTPS enabled but httpsKeystore is empty in config — using HTTP");
             } else if (Files.isRegularFile(keystorePath)) {
@@ -124,15 +96,6 @@ public class FileServerAndroid {
                             + " — falling back to HTTP: " + e.getMessage(), e);
                 }
             } else {
-                Path parent = keystorePath.getParent();
-                if (parent != null && !Files.exists(parent)) {
-                    try {
-                        Files.createDirectories(parent);
-                        Log.i(TAG, "Created keystore directory: " + parent);
-                    } catch (Exception e) {
-                        Log.e(TAG, "Cannot create directory " + parent, e);
-                    }
-                }
                 Log.w(TAG, "HTTPS enabled but keystore not found: " + keystorePath
                         + " — using HTTP. Place keystore.p12 at that path and restart.");
             }
@@ -142,9 +105,8 @@ public class FileServerAndroid {
         // Создание сервера (с fallback HTTPS → HTTP)
         // ============================================================
         HttpServer srv = null;
-        InetSocketAddress addr = new InetSocketAddress(config.host, config.port);
+        java.net.InetSocketAddress addr = new java.net.InetSocketAddress(config.host, config.port);
         actualProtocol = "http";
-
         if (httpsMode) {
             try {
                 HttpsServer httpsSrv = HttpsServer.create(addr, 0);
@@ -159,7 +121,6 @@ public class FileServerAndroid {
                 srv = null;
             }
         }
-
         if (srv == null) {
             srv = HttpServer.create(addr, 0);
             actualProtocol = "http";
@@ -170,14 +131,12 @@ public class FileServerAndroid {
         srv.createContext("/api/proxy",  ex -> ProxyHandler.handle(ex));
         srv.createContext("/api",        new ApiHandler());
         srv.createContext("/",           rootHandler);
-
         srv.setExecutor(Executors.newFixedThreadPool(8));
         srv.start();
         server = srv;
 
         registerMediaReceiver();
-        startConfigWatcher();          // <-- ДОБАВЛЕНО
-
+        startConfigWatcher();
         new Thread(() -> {
             try {
                 rescanAndRemountShares();
@@ -207,11 +166,7 @@ public class FileServerAndroid {
             serverCopy = null;
         }
         FileServer.unbind();
-
-        // ВАЖНО: configTemp НЕ удаляем — он должен сохраняться между
-        // перезапусками (HTTPS-настройки, добавленные shares и т.п.).
         configTemp = null;
-
         actualProtocol = "http";
     }
 
@@ -220,80 +175,26 @@ public class FileServerAndroid {
         return actualProtocol + "://" + getLocalIpAddress() + ":" + port;
     }
 
-    /**
-     * URL для локального WebView.
-     * Используем реальный IP, а не 127.0.0.1, чтобы WebView
-     * не ругался на несовпадение SAN в самоподписанном сертификате.
-     */
     public String getLocalUrl() {
         int port = (config != null) ? config.port : 8080;
         return actualProtocol + "://" + getLocalIpAddress() + ":" + port + "/";
     }
 
-    /**
-     * Резолвит путь к keystore из config.httpsKeystore.
-     *
-     * Поддерживаемые варианты:
-     *   "assets:certs/keystore.p12"       → копируется из assets во внешний filesDir
-     *   "/sdcard/certs/keystore.p12"      → абсолютный путь как есть
-     *   "certs/keystore.p12"              → относительно getExternalFilesDir(null)
-     *
-     * Возвращает null, если путь пустой или невалидный.
-     * Возвращает Path (может указывать на ещё не существующий файл).
-     */
     private Path resolveHttpsKeystore() {
         if (config == null || config.httpsKeystore == null) return null;
         String raw = config.httpsKeystore.trim();
         if (raw.isEmpty()) return null;
 
-        // 1) assets: — извлекаем из APK во внешний filesDir
-        if (raw.startsWith("assets:")) {
-            String assetPath = raw.substring("assets:".length()).trim();
-            if (assetPath.isEmpty()) {
-                Log.w(TAG, "Empty asset path in httpsKeystore");
-                return null;
-            }
-            try {
-                File base = context.getExternalFilesDir(null);
-                if (base == null) base = context.getFilesDir();
-                File target = new File(base, "certs/keystore.p12");
-
-                if (!target.exists()) {
-                    File parent = target.getParentFile();
-                    if (parent != null && !parent.exists()) parent.mkdirs();
-
-                    try (InputStream is = context.getAssets().open(assetPath);
-                         OutputStream os = new FileOutputStream(target)) {
-                        byte[] buf = new byte[8192];
-                        int n;
-                        while ((n = is.read(buf)) > 0) os.write(buf, 0, n);
-                    }
-                    Log.i(TAG, "Extracted asset " + assetPath + " → " + target);
-                }
-                return target.toPath();
-            } catch (Exception e) {
-                Log.e(TAG, "Cannot extract asset " + assetPath, e);
-                return null;
-            }
-        }
-
-        // 2) Абсолютный путь — как есть
         try {
-            Path p = Paths.get(raw);
+            Path p = java.nio.file.Paths.get(raw);
             if (p.isAbsolute()) return p.normalize();
         } catch (Exception e) {
             Log.e(TAG, "Invalid absolute path: " + raw, e);
             return null;
         }
 
-        // 3) Относительный путь — от getExternalFilesDir(null),
-        //    чтобы пользователь мог положить файл через файловый менеджер.
-        File base = context.getExternalFilesDir(null);
-        if (base == null) base = context.getFilesDir(); // fallback
-        return new File(base, raw).toPath().normalize();
+        return null;
     }
-
-
 
     private String getLocalIpAddress() {
         try {
@@ -317,7 +218,6 @@ public class FileServerAndroid {
     // ============================================================
     // Горячее перемонтирование
     // ============================================================
-
     private void registerMediaReceiver() {
         if (mediaReceiver != null) return;
         mediaReceiver = new BroadcastReceiver() {
@@ -325,10 +225,8 @@ public class FileServerAndroid {
             public void onReceive(Context c, Intent intent) {
                 String action = intent != null ? intent.getAction() : null;
                 Log.i(TAG, "Media event: " + action);
-
                 new Thread(() -> {
                     try {
-                        // Даём системе до-смонтировать volume
                         Thread.sleep(1500);
                     } catch (InterruptedException ignored) {}
                     try {
@@ -339,7 +237,6 @@ public class FileServerAndroid {
                 }, "MediaRemount").start();
             }
         };
-
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_MEDIA_MOUNTED);
         filter.addAction(Intent.ACTION_MEDIA_UNMOUNTED);
@@ -347,7 +244,6 @@ public class FileServerAndroid {
         filter.addAction(Intent.ACTION_MEDIA_EJECT);
         filter.addAction(Intent.ACTION_MEDIA_BAD_REMOVAL);
         filter.addDataScheme("file");
-
         try {
             if (Build.VERSION.SDK_INT >= 33) {
                 context.registerReceiver(mediaReceiver, filter, Context.RECEIVER_EXPORTED);
@@ -367,19 +263,6 @@ public class FileServerAndroid {
         mediaReceiver = null;
     }
 
-    /**
-     * Сканирует текущие подключённые volume'ы и приводит config.shares
-     * в соответствие:
-     *   • stale external share (путь под /storage/ не существует) —
-     *     перемонтируется на новый volume:
-     *       1) по похожему имени volume (сравнение normalized);
-     *       2) если volume ровно один новый — берём его;
-     *       3) иначе — оставляем как есть (share останется «мёртвым»);
-     *   • новые volume, которых нет в shares — добавляются;
-     *   • config сохраняется в файл.
-     *
-     * Публичный — можно вызвать вручную из будущего API-эндпоинта.
-     */
     public synchronized void rescanAndRemountShares() {
         if (config == null) {
             Log.w(TAG, "rescan: config is null");
@@ -388,7 +271,6 @@ public class FileServerAndroid {
         StorageManager sm = (StorageManager) context.getSystemService(Context.STORAGE_SERVICE);
         if (sm == null) return;
 
-        // 1. Актуальные mount points
         List<StorageVolume> volumes = sm.getStorageVolumes();
         Map<String, File> currentVolumes = new LinkedHashMap<>();
         for (StorageVolume vol : volumes) {
@@ -397,7 +279,7 @@ public class FileServerAndroid {
                 currentVolumes.put(dir.getAbsolutePath(), dir);
             }
         }
-        // дополнительно — прямое сканирование /storage (для старых устройств)
+
         File[] storageDirs = new File("/storage").listFiles();
         if (storageDirs != null) {
             for (File f : storageDirs) {
@@ -410,7 +292,6 @@ public class FileServerAndroid {
             }
         }
 
-        // 2. Классификация shares
         Set<String> alivePaths = new HashSet<>();
         List<Config.Share> staleExternal = new ArrayList<>();
         for (Config.Share sh : config.shares) {
@@ -426,11 +307,8 @@ public class FileServerAndroid {
             }
         }
 
-        // 3. Перемонтирование stale external
         for (Config.Share stale : staleExternal) {
             File matched = null;
-
-            // 3a. Совпадение по похожему имени volume
             String normOld = normalizeShareName(stale.name);
             for (Map.Entry<String, File> e : currentVolumes.entrySet()) {
                 if (alivePaths.contains(e.getKey())) continue;
@@ -443,8 +321,6 @@ public class FileServerAndroid {
                     break;
                 }
             }
-
-            // 3b. Fallback: ровно один свободный volume — берём его
             if (matched == null) {
                 List<File> free = new ArrayList<>();
                 for (Map.Entry<String, File> e : currentVolumes.entrySet()) {
@@ -452,7 +328,6 @@ public class FileServerAndroid {
                 }
                 if (free.size() == 1) matched = free.get(0);
             }
-
             if (matched != null) {
                 Log.i(TAG, "Remount share '" + stale.name + "': "
                         + stale.physical + " -> " + matched.getAbsolutePath());
@@ -464,14 +339,12 @@ public class FileServerAndroid {
             }
         }
 
-        // 4. Добавление новых volume
         for (Map.Entry<String, File> e : currentVolumes.entrySet()) {
             if (alivePaths.contains(e.getKey())) continue;
             String desc = volumeDescription(sm, volumes, e.getValue());
             addShareIfMissing(desc, e.getValue());
         }
 
-        // 5. Сохраняем (иначе обновления потеряются при перезапуске)
         try {
             config.save(FileServer.configPath());
             noteInternalConfigSave();
@@ -513,24 +386,17 @@ public class FileServerAndroid {
         return s.replaceAll("[^a-zA-Z0-9]", "").toLowerCase(Locale.ROOT);
     }
 
-    // ============================================================
-    // Добавление нового share; обновление stale при совпадении имени
-    // ============================================================
-
     private synchronized void addShareIfMissing(String rawName, File dir) {
         if (config == null) return;
-
         String volName = rawName != null
                 ? rawName.replaceAll("[^a-zA-Z0-9_\\-]", "_")
                 : "External_Drive";
         if (volName.isEmpty()) volName = "External_Drive";
 
-        // 1. Тот же путь уже занят?
         for (Config.Share sh : config.shares) {
             if (dir.getAbsolutePath().equals(sh.physical)) return;
         }
 
-        // 2. Имя занято share'ом с мёртвым путём → обновляем path
         for (Config.Share sh : config.shares) {
             if (sh.name.equals(volName)) {
                 File old = new File(sh.physical);
@@ -544,13 +410,11 @@ public class FileServerAndroid {
             }
         }
 
-        // 3. Добавляем новый с уникальным именем
         String baseName = volName;
         int counter = 1;
         while (config.findShare(volName) != null) {
             volName = baseName + "_" + counter++;
         }
-
         Config.Share usbShare = new Config.Share();
         usbShare.name = volName;
         usbShare.physical = dir.getAbsolutePath();
@@ -561,96 +425,8 @@ public class FileServerAndroid {
         for (String user : config.users.keySet()) {
             usbShare.users.add(user);
         }
-
         config.shares.add(usbShare);
         Log.i(TAG, "Auto-mounted share: " + volName + " -> " + dir.getAbsolutePath());
-    }
-
-    // ============================================================
-    // Подготовка webRoot / config, watcher
-    // ============================================================
-
-    private void prepareWebRoot() throws IOException {
-        Path filesDir = context.getFilesDir().toPath();
-        Path www = filesDir.resolve("www");
-
-        deleteRecursive(www);
-        Files.createDirectories(www);
-
-        copyAssetFolder("www", www);
-        this.webRoot = www;
-    }
-
-    private void prepareConfig() throws IOException {
-        Path filesDir = context.getFilesDir().toPath();
-        Path internalCfg = filesDir.resolve("config.json");
-
-        // Проверяем, есть ли config.json в публичной папке Download
-        // Если есть — используем его (удобно для отладки)
-        Path externalCfg = java.nio.file.Paths.get("/storage/emulated/0/Download/certs/config.json");
-
-        if (Files.exists(externalCfg)) {
-            Log.i(TAG, "Using external config: " + externalCfg);
-            this.configTemp = externalCfg;
-            return;
-        }
-
-        // Иначе — стандартная логика (копируем из assets, если нет внутреннего)
-        if (!Files.exists(internalCfg)) {
-            try (InputStream is = context.getAssets().open("config.json")) {
-                Files.copy(is, internalCfg);
-            }
-        }
-        this.configTemp = internalCfg;
-    }
-
-    private void copyAssetFolder(String assetPath, Path dst) throws IOException {
-        String[] children;
-        try {
-            children = context.getAssets().list(assetPath);
-        } catch (IOException e) {
-            return;
-        }
-        if (children == null || children.length == 0) {
-            try {
-                Files.deleteIfExists(dst);
-            } catch (IOException ignored) {}
-
-            try (InputStream is = context.getAssets().open(assetPath);
-                 OutputStream os = Files.newOutputStream(dst,
-                         StandardOpenOption.CREATE,
-                         StandardOpenOption.TRUNCATE_EXISTING,
-                         StandardOpenOption.WRITE)) {
-                byte[] buf = new byte[8192];
-                int n;
-                while ((n = is.read(buf)) > 0) {
-                    os.write(buf, 0, n);
-                }
-            }
-            return;
-        }
-
-        Files.createDirectories(dst);
-        for (String name : children) {
-            String childAsset = assetPath.isEmpty() ? name : assetPath + "/" + name;
-            Path childDst = dst.resolve(name);
-            copyAssetFolder(childAsset, childDst);
-        }
-    }
-
-    private static void deleteRecursive(Path p) throws IOException {
-        if (p == null || !Files.exists(p)) return;
-
-        List<Path> all = new ArrayList<>();
-        try (Stream<Path> walk = Files.walk(p)) {
-            walk.forEach(all::add);
-        }
-
-        all.sort((a, b) -> b.getNameCount() - a.getNameCount());
-
-        for (Path x : all) {
-            try { Files.deleteIfExists(x); } catch (IOException ignored) {}
-        }
     }
 
     private void startWatcher() {
@@ -669,25 +445,18 @@ public class FileServerAndroid {
             }
         }
     }
-// ============================================================
-// Горячая перезагрузка config.json — наблюдатель
-// ============================================================
 
     private void startConfigWatcher() {
         if (configTemp == null) return;
-
         try {
             lastConfigMtime = Files.getLastModifiedTime(configTemp).toMillis();
         } catch (IOException e) {
             lastConfigMtime = 0L;
         }
-
         final Path watchPath = configTemp;
-
         configWatcherThread = new Thread(() -> {
             Log.i(TAG, "ConfigWatcher: started for " + watchPath
                     + ", mtime=" + lastConfigMtime);
-
             while (!Thread.currentThread().isInterrupted()) {
                 try {
                     Thread.sleep(CONFIG_POLL_MS);
@@ -696,26 +465,18 @@ public class FileServerAndroid {
                 }
                 try {
                     if (!Files.exists(watchPath)) continue;
-
                     long mtime = Files.getLastModifiedTime(watchPath).toMillis();
                     if (mtime <= lastConfigMtime) continue;
-
-                    // Пауза: даём писателю завершить запись (некоторые
-                    // редакторы пишут в 2 приёма: truncate + write).
                     try { Thread.sleep(300); }
                     catch (InterruptedException ie) { return; }
-
                     mtime = Files.getLastModifiedTime(watchPath).toMillis();
                     lastConfigMtime = mtime;
-
                     if (System.currentTimeMillis() < suppressConfigReloadUntil) {
                         Log.i(TAG, "ConfigWatcher: change is internal, skipped");
                         continue;
                     }
-
                     Log.i(TAG, "ConfigWatcher: mtime changed → reload");
                     reloadConfig();
-
                 } catch (Exception e) {
                     Log.w(TAG, "ConfigWatcher poll error: " + e.getMessage());
                 }
@@ -734,10 +495,6 @@ public class FileServerAndroid {
         }
     }
 
-    /**
-     * Помечает последнюю запись config.json как "свою" —
-     * чтобы наблюдатель не запускал бессмысленный reload.
-     */
     private void noteInternalConfigSave() {
         suppressConfigReloadUntil = System.currentTimeMillis() + 3000L;
         if (configTemp != null) {
@@ -747,39 +504,9 @@ public class FileServerAndroid {
         }
     }
 
-// ============================================================
-// Горячая перезагрузка config.json — применение
-// ============================================================
-
-    /**
-     * Перечитывает config.json и применяет изменившиеся параметры.
-     *
-     * Применяется ДИНАМИЧЕСКИ:
-     *   • shares        — список, пути, права, квоты;
-     *   • users         — пароли, квоты, флаги;
-     *   • autostart.*   — списки;
-     *   • ollama.binary / cwd (флаг enabled принудительно false).
-     *
-     * ТРЕБУЕТ ПОЛНОГО ПЕРЕЗАПУСКА (пишется предупреждение в лог,
-     * изменения игнорируются):
-     *   • http.host, http.port;
-     *   • https.enabled, https.keystore/password/cert/key;
-     *   • web (каталог статики).
-     *
-     * После успешной перезагрузки:
-     *   – config/auth/quota заменяются;
-     *   – FileServer.bind() обновляет статические геттеры
-     *     (config(), auth(), quota()) — все обработчики (ApiHandler,
-     *     RootHandler, ProxyHandler, AndroidBridge, ...) видят новый
-     *     config автоматически, т.к. получают его через FileServer.*;
-     *   – FileWatcher перезапускается для нового набора shares;
-     *   – кэш квот сбрасывается.
-     */
     private synchronized void reloadConfig() {
         if (configTemp == null) return;
-
         Log.i(TAG, "reloadConfig: config changed, reloading...");
-
         Config newCfg;
         try {
             newCfg = Config.load(configTemp);
@@ -788,14 +515,12 @@ public class FileServerAndroid {
             return;
         }
 
-        // --- Принудительные Android-настройки ---
         newCfg.videoChatEnabled = false;
         newCfg.hermesEnabled    = false;
         newCfg.ollamaEnabled    = false;
         newCfg.consoleShell     = "";
         newCfg.consoleCwd       = "";
 
-        // --- http.host / http.port: только лог ---
         if (newCfg.port != config.port) {
             Log.w(TAG, "reloadConfig: http.port change (" + config.port + " → "
                     + newCfg.port + ") requires full restart — keeping " + config.port);
@@ -807,7 +532,6 @@ public class FileServerAndroid {
         newCfg.port = config.port;
         newCfg.host = config.host;
 
-        // --- https.*: только лог ---
         if (newCfg.httpsEnabled != config.httpsEnabled) {
             Log.w(TAG, "reloadConfig: https.enabled change requires restart");
         }
@@ -817,24 +541,19 @@ public class FileServerAndroid {
         newCfg.httpsCert     = config.httpsCert;
         newCfg.httpsKey      = config.httpsKey;
 
-        // --- web: только лог ---
         if (newCfg.webPath == null ? config.webPath != null : !newCfg.webPath.equals(config.webPath)) {
             Log.w(TAG, "reloadConfig: web path change requires restart — keeping "
                     + config.webPath);
         }
         newCfg.webPath = config.webPath;
 
-        // --- swap ---
         Config oldCfg = this.config;
         this.config = newCfg;
         this.auth   = new AuthService(newCfg, tokens);
         this.quota  = new QuotaService(this.auth);
         this.quota.invalidateAll();
 
-        // --- обновить статические ссылки FileServer ---
         FileServer.bind(this, configTemp);
-
-        // --- перезапустить FileWatcher под новый набор shares ---
         restartFileWatcher();
 
         Log.i(TAG, "reloadConfig OK: shares=" + newCfg.shares.size()
@@ -853,6 +572,7 @@ public class FileServerAndroid {
             Log.w(TAG, "restartFileWatcher failed: " + e.getMessage());
         }
     }
+
     Config config()          { return config; }
     AuthService auth()       { return auth; }
     TokenService tokens()    { return tokens; }
