@@ -69,12 +69,26 @@ public class AndroidBridge {
 
     private final Activity activity;
     private final Context context;
+    private static volatile android.content.Context sStaticContext;
 
     public AndroidBridge(Activity activity) {
         this.activity = activity;
         this.context = activity.getApplicationContext();
+        sStaticContext = this.context;
     }
-
+    private AndroidBridge(android.content.Context ctx) {
+        this.activity = null;
+        this.context  = ctx;
+    }
+    public static org.json.JSONArray getInstalledApps() {
+        android.content.Context c = sStaticContext;
+        if (c == null) return new org.json.JSONArray();
+        try {
+            return new org.json.JSONArray(new AndroidBridge(c).getApps());
+        } catch (org.json.JSONException e) {
+            return new org.json.JSONArray();
+        }
+    }
     @JavascriptInterface
     public boolean isAndroidApp() { return true; }
 

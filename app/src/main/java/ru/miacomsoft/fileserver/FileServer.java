@@ -183,4 +183,7 @@ public class FileServer {
             return s;
         }
     }
+    static org.json.JSONArray androidApps() {
+        return AndroidBridge.getInstalledApps();
+    }
 }

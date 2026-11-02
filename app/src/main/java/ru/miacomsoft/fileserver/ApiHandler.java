@@ -73,6 +73,7 @@ public class ApiHandler implements HttpHandler {
                 case "/api/server-copy/status":   handleCopyStatus(ex, method, q);        return;
                 case "/api/server-copy/list":     handleCopyList(ex, method, session);    return;
                 case "/api/server-copy/cancel":   handleCopyCancel(ex, method, q, session); return;
+                case "/api/apps":            handleApps(ex, method, session);            return;
                 default:
                     if (tryApiSharePath(ex, path)) return;
                     FileServer.sendErrorAndClose(ex, 404, "Unknown endpoint: " + path);
@@ -1073,6 +1074,14 @@ public class ApiHandler implements HttpHandler {
         FileServer.sendJson(ex, 200, resp.toString());
     }
 
+    private void handleApps(HttpExchange ex, String method, AuthService.Session s) throws Exception {
+        if (!"GET".equals(method))         { FileServer.sendError(ex, 405, "Method not allowed"); return; }
+        if (s == null || s.anonymous)      { FileServer.sendError(ex, 403, "Authenticated users only"); return; }
+        org.json.JSONArray apps = FileServer.androidApps();
+        org.json.JSONObject resp = new org.json.JSONObject();
+        resp.put("apps", apps);
+        FileServer.sendJson(ex, 200, resp.toString());
+    }
     private void handleCopyCancel(HttpExchange ex, String method,
                                   Map<String, String> q,
                                   AuthService.Session s) throws Exception {

@@ -300,17 +300,17 @@
     // ============================================================
 
     function reloadApps() {
+        if (!isInAndroidApp()) {
+            initRemoteApps();
+            return FAR.AndroidPrograms.apps.length;
+        }
         try {
             unregisterAndroidApps();
             FAR.AndroidPrograms.apps = loadApps();
-            if (FAR.AndroidPrograms.apps.length > 0) {
-                registerApps();
-            }
+            if (FAR.AndroidPrograms.apps.length > 0) registerApps();
             if (FAR.WM && typeof FAR.WM._renderStartMenu === 'function') {
                 const sm = document.getElementById('wmStartMenu');
-                if (sm && sm.classList.contains('open')) {
-                    FAR.WM._renderStartMenu('');
-                }
+                if (sm && sm.classList.contains('open')) FAR.WM._renderStartMenu('');
             }
             return FAR.AndroidPrograms.apps.length;
         } catch (e) {
@@ -334,20 +334,34 @@
     // ============================================================
 
     function init() {
-        if (!isInAndroidApp()) {
-            console.log('[AndroidPrograms] не в Android WebView — отключено');
-            return;
+        if (isInAndroidApp()) {
+            FAR.AndroidPrograms.available = true;
+            FAR.AndroidPrograms.apps = loadApps();
+            console.log('[AndroidPrograms] найдено приложений: '
+                + FAR.AndroidPrograms.apps.length);
+            if (FAR.AndroidPrograms.apps.length > 0) registerApps();
+        } else {
+            initRemoteApps();                       // ← удалённый клиент
         }
-        FAR.AndroidPrograms.available = true;
-        FAR.AndroidPrograms.apps = loadApps();
-        console.log('[AndroidPrograms] найдено приложений: ' + FAR.AndroidPrograms.apps.length);
-
         registerSettingsApp();
         registerDefaultLauncherApp();
-
-        if (FAR.AndroidPrograms.apps.length > 0) {
-            registerApps();
-        }
+    }
+    function initRemoteApps() {
+        fetch('/api/apps', { credentials: 'include' })
+            .then(r => r.ok ? r.json() : { apps: [] })
+            .then(d => {
+                const arr = Array.isArray(d.apps) ? d.apps : [];
+                arr.sort((a, b) => String(a.label||a.pkg||'')
+                    .localeCompare(String(b.label||b.pkg||''), 'ru'));
+                FAR.AndroidPrograms.available = true;
+                FAR.AndroidPrograms.apps = arr;
+                if (arr.length > 0) registerApps();
+                if (FAR.WM && typeof FAR.WM._renderStartMenu === 'function') {
+                    const sm = document.getElementById('wmStartMenu');
+                    if (sm && sm.classList.contains('open')) FAR.WM._renderStartMenu('');
+                }
+            })
+            .catch(e => console.warn('[AndroidPrograms] /api/apps failed:', e));
     }
 
     FAR.AndroidPrograms.launch = launchApp;
@@ -360,4 +374,5 @@
     } else {
         init();
     }
+
 })();
