@@ -1,0 +1,78 @@
+/* ============================================================
+   login-gate.css — центральная кнопка «Войти» на главном экране
+   ============================================================ */
+
+.login-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 5000;              /* ниже окон WM (≥6000), ниже модалок */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 50% 30%,
+        #2a2a3e 0%, #1e1e2e 55%, #11111b 100%);
+    padding: 20px;
+}
+
+/* явно перебиваем возможные конфликты с .hidden из base.css */
+.login-gate.hidden {
+    display: none !important;
+}
+
+.login-gate-card {
+    background: #313244;
+    border: 1px solid #45475a;
+    border-radius: 16px;
+    padding: 48px 40px;
+    text-align: center;
+    max-width: 440px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.login-gate-icon {
+    font-size: 64px;
+    line-height: 1;
+    margin-bottom: 16px;
+}
+
+.login-gate-title {
+    font-size: 28px;
+    color: #89b4fa;
+    margin: 0 0 8px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+}
+
+.login-gate-subtitle {
+    color: #a6adc8;
+    margin: 0 0 32px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.login-gate-btn {
+    background: #a6e3a1;
+    color: #1e1e2e;
+    border: none;
+    border-radius: 8px;
+    padding: 14px 40px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.login-gate-btn:hover {
+    background: #94d98e;
+}
+
+.login-gate-btn:active {
+    transform: scale(0.98);
+}
+
+.login-gate-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}

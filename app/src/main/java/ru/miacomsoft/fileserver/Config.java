@@ -45,10 +45,6 @@ public class Config {
     public int videoChatPort = 8081;
     public String wsGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-    public boolean ollamaEnabled = true;
-    public String ollamaBinary = "ollama";
-    public String ollamaCwd = "";
-
     public JSONArray autostartAndroid = new JSONArray();
     public JSONArray autostartJs = new JSONArray();
     public JSONArray autostartWm = new JSONArray();
@@ -153,14 +149,6 @@ public class Config {
             cfg.videoChatPort = vc.optInt("port", 8081);
             String guid = vc.optString("wsGuid", "").trim();
             if (!guid.isEmpty()) cfg.wsGuid = guid;
-        }
-
-        JSONObject ol = root.optJSONObject("ollama");
-        if (ol != null) {
-            cfg.ollamaEnabled = ol.optBoolean("enabled", true);
-            String bin = ol.optString("binary", "ollama").trim();
-            if (!bin.isEmpty()) cfg.ollamaBinary = bin;
-            cfg.ollamaCwd = ol.optString("cwd", "").trim();
         }
 
         JSONObject ast = root.optJSONObject("autostart");
@@ -278,14 +266,6 @@ public class Config {
             vc.put("port", videoChatPort);
             vc.put("wsGuid", wsGuid);
             root.put("videochat", vc);
-        }
-
-        if (!ollamaEnabled) {
-            JSONObject ol = new JSONObject();
-            ol.put("enabled", false);
-            ol.put("binary", ollamaBinary);
-            ol.put("cwd", ollamaCwd);
-            root.put("ollama", ol);
         }
 
         if (autostartAndroid.length() > 0 || autostartJs.length() > 0 || autostartWm.length() > 0) {

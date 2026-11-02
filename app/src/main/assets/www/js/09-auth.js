@@ -109,7 +109,7 @@ FAR.onAuthButton = function () {
     if (typeof FAR.updateTotalSize === 'function') FAR.updateTotalSize();
     if (typeof FAR.updateConnIndicators === 'function') FAR.updateConnIndicators();
 
-    // WM не активируем. После успешного логина submitConnModal
-    // сам вызовет WM.enter() → _restoreWindows восстановит окна.
-    FAR.openConnModal(true);
+    if (typeof FAR.updateLoginGate === 'function') {
+        FAR.updateLoginGate();
+    }
 };

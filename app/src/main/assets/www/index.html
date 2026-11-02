@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
     <title>FileServer — Рабочий стол</title>
-
     <script src="lib/jszip/jszip.min.js"></script>
-
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/panels.css">
     <link rel="stylesheet" href="css/context-menu.css">
@@ -36,12 +34,23 @@
     <link rel="stylesheet" href="css/gcode-viewer.css">
     <link rel="stylesheet" href="css/wm.css">
     <link rel="stylesheet" href="css/virtual-gamepad.css">
+    <link rel="stylesheet" href="css/login-gate.css">
 </head>
 <body>
 
 <!-- Единственный корневой контейнер для модалок (connection, progress, loading, desktop) -->
 <div id="modalRoot"></div>
 <div class="toast-container" id="toastContainer"></div>
+
+<div id="loginGate" class="login-gate">
+    <div class="login-gate-card">
+        <div class="login-gate-icon">🔐</div>
+        <h1 class="login-gate-title">FileServer</h1>
+        <p class="login-gate-subtitle">Войдите, чтобы открыть рабочий стол</p>
+        <button type="button" class="login-gate-btn"
+                onclick="FAR.openConnModal(true)">🔓 Войти</button>
+    </div>
+</div>
 
 <!-- Pannellum -->
 <script src="lib/Pannellum2_5_6/pannellum.js"></script>
@@ -124,6 +133,6 @@
 <script src="js/63-android-apps.js"></script>
 <script src="js/64-autostart.js"></script>
 <script src="js/65-change-password.js"></script>
-
+<script src="js/66-login-gate.js"></script>
 </body>
 </html>

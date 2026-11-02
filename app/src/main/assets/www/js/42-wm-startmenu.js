@@ -51,7 +51,6 @@ FAR.WM.APP_CATEGORY_MAP = {
     pdf: 'files', browser: 'files',
     panorama: 'media', panoeditor: 'media', mp3: 'media', video: 'media',
     jsdos: 'games', nes: 'games', emulator: 'games',
-    ollama: 'ai',
     videochat: 'stream', broadcaster: 'stream',
     connect: 'system', gamepad: 'system',
     debug: 'system', log: 'system', console: 'system',

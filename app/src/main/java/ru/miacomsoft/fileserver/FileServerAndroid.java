@@ -65,7 +65,6 @@ public class FileServerAndroid {
         config.port = 8080;
         config.videoChatEnabled = false;
         config.hermesEnabled    = false;
-        config.ollamaEnabled    = false;
         config.consoleShell     = "";
         config.consoleCwd       = "";
 
@@ -517,7 +516,6 @@ public class FileServerAndroid {
 
         newCfg.videoChatEnabled = false;
         newCfg.hermesEnabled    = false;
-        newCfg.ollamaEnabled    = false;
         newCfg.consoleShell     = "";
         newCfg.consoleCwd       = "";
 

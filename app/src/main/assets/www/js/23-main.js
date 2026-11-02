@@ -79,7 +79,12 @@ document.addEventListener('DOMContentLoaded', async function () {
     // connectToDb выбросит NoAccessError. Лучше сразу показать
     // модалку — без лишнего сетевого запроса и с понятным UX.
     if (!saved || !saved.user) {
-        FAR.openConnModal(true);
+        // На главном экране уже отрисована кнопка «Войти».
+        // Модалку автоматически не открываем — пользователь
+        // нажмёт кнопку сам, когда будет готов.
+        if (typeof FAR.updateLoginGate === 'function') {
+            FAR.updateLoginGate();
+        }
         return;
     }
 
