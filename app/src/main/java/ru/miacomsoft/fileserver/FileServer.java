@@ -37,6 +37,7 @@ public class FileServer {
         staticHandler = inst.staticHandler();
         rootHandler = inst.rootHandler();
         serverCopy = inst.serverCopy();
+        AndroidBridge.setContext(inst.getAndroidContext());
     }
 
     static void unbind() {
@@ -49,6 +50,7 @@ public class FileServer {
         rootHandler = null;
         configPath = null;
         serverCopy = null;
+        AndroidBridge.setContext(null);
         sseClients.clear();
     }
 

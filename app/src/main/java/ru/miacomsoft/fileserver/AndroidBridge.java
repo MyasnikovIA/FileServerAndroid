@@ -89,6 +89,10 @@ public class AndroidBridge {
             return new org.json.JSONArray();
         }
     }
+    public static void setContext(android.content.Context ctx) {
+        sStaticContext = ctx;
+    }
+
     @JavascriptInterface
     public boolean isAndroidApp() { return true; }
 

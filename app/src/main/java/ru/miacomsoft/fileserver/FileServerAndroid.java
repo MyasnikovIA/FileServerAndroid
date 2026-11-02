@@ -581,4 +581,7 @@ public class FileServerAndroid {
     Path webRoot()           { return webRoot; }
     RootHandler rootHandler(){ return rootHandler; }
     StaticHandler staticHandler() { return staticHandler; }
+    android.content.Context getAndroidContext() {
+        return context;
+    }
 }

@@ -1075,11 +1075,16 @@ public class ApiHandler implements HttpHandler {
     }
 
     private void handleApps(HttpExchange ex, String method, AuthService.Session s) throws Exception {
-        if (!"GET".equals(method))         { FileServer.sendError(ex, 405, "Method not allowed"); return; }
-        if (s == null || s.anonymous)      { FileServer.sendError(ex, 403, "Authenticated users only"); return; }
+        if (!"GET".equals(method)) {
+            FileServer.sendError(ex, 405, "Method not allowed");
+            return;
+        }
+        // Убрана проверка анонимности — как у /api/autostart (GET).
+        // Список не секретный, а POST /api/autostart всё равно требует auth.
         org.json.JSONArray apps = FileServer.androidApps();
         org.json.JSONObject resp = new org.json.JSONObject();
         resp.put("apps", apps);
+        resp.put("count", apps.length());
         FileServer.sendJson(ex, 200, resp.toString());
     }
     private void handleCopyCancel(HttpExchange ex, String method,
